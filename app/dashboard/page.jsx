@@ -57,6 +57,7 @@ import {
   Search,
   Filter,
   User,
+  CalendarDays,
 } from "lucide-react";
 
 
@@ -89,6 +90,28 @@ function DashboardContent() {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [userFilter, setUserFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+
+  // New state for dynamic chart
+  const [chartTimePeriod, setChartTimePeriod] = useState('6months');
+  const [chartGrowthData, setChartGrowthData] = useState({
+    driversGrowth: 0,
+    clientsGrowth: 0,
+    totalGrowth: 0
+  });
+
+  // New state for dynamic revenue chart
+  const [revenueTimePeriod, setRevenueTimePeriod] = useState('week');
+  const [revenueGrowthData, setRevenueGrowthData] = useState({
+    revenueGrowth: 0,
+    bookingsGrowth: 0
+  });
+  const [allBookings, setAllBookings] = useState([]);
+
+  // New state for bookings table and filtering
+  const [allBookingsTable, setAllBookingsTable] = useState([]);
+  const [filteredBookings, setFilteredBookings] = useState([]);
+  const [bookingFilter, setBookingFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
 
   // Get user from localStorage once component mounts
@@ -186,6 +209,8 @@ function DashboardContent() {
         ...doc.data(),
       }));
 
+      // Store all bookings for revenue chart
+      setAllBookings(bookingsData);
 
       // Calculate booking statistics
       const activeBookings = bookingsData.filter(
@@ -234,6 +259,7 @@ function DashboardContent() {
         totalRevenue,
         recentBookings,
         totalBookings: bookingsData.length,
+        allBookings: bookingsData,
       };
     } catch (error) {
       console.error("Error fetching bookings data:", error);
@@ -245,43 +271,171 @@ function DashboardContent() {
         totalRevenue: 0,
         recentBookings: [],
         totalBookings: 0,
+        allBookings: [],
       };
     }
   };
 
 
-  // Generate weekly revenue data from bookings
-  const generateWeeklyRevenueData = (bookings) => {
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const weeklyStats = days.map((day) => ({ day, revenue: 0, bookings: 0 }));
-
-
-    // Get current week's bookings
+  // Enhanced Generate dynamic revenue data with multiple time periods
+  const generateDynamicRevenueData = (bookings, timePeriod) => {
     const now = new Date();
-    const weekStart = new Date(now.setDate(now.getDate() - now.getDay() + 1));
+    let startDate, endDate, dataPoints = [];
+    
+    switch (timePeriod) {
+      case 'week':
+        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        startDate = new Date(now.setDate(now.getDate() - now.getDay() + 1));
+        dataPoints = days.map((day, index) => ({
+          period: day,
+          revenue: 0,
+          bookings: 0,
+          date: new Date(startDate.getTime() + index * 24 * 60 * 60 * 1000)
+        }));
+        break;
+        
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const daysInMonth = endDate.getDate();
+        
+        for (let i = 1; i <= daysInMonth; i++) {
+          dataPoints.push({
+            period: i.toString(),
+            revenue: 0,
+            bookings: 0,
+            date: new Date(now.getFullYear(), now.getMonth(), i)
+          });
+        }
+        break;
+        
+      case '3months':
+        for (let i = 2; i >= 0; i--) {
+          const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          dataPoints.push({
+            period: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+            revenue: 0,
+            bookings: 0,
+            date: monthDate
+          });
+        }
+        break;
+        
+      case '6months':
+        for (let i = 5; i >= 0; i--) {
+          const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          dataPoints.push({
+            period: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+            revenue: 0,
+            bookings: 0,
+            date: monthDate
+          });
+        }
+        break;
+        
+      case 'year':
+        for (let i = 11; i >= 0; i--) {
+          const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          dataPoints.push({
+            period: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+            revenue: 0,
+            bookings: 0,
+            date: monthDate
+          });
+        }
+        break;
+    }
 
-
+    // Count bookings and revenue for each period
     bookings.forEach((booking) => {
       if (booking.createdAt && booking.status === "completed") {
         const bookingDate = booking.createdAt.toDate
           ? booking.createdAt.toDate()
           : new Date(booking.createdAt);
-        const daysDiff = Math.floor(
-          (bookingDate - weekStart) / (1000 * 60 * 60 * 24)
-        );
 
+        dataPoints.forEach((point) => {
+          let isInPeriod = false;
+          
+          if (timePeriod === 'week') {
+            const daysDiff = Math.floor((bookingDate - point.date) / (1000 * 60 * 60 * 24));
+            isInPeriod = daysDiff >= 0 && daysDiff < 1;
+          } else if (timePeriod === 'month') {
+            isInPeriod = bookingDate.getDate() === point.date.getDate() &&
+                        bookingDate.getMonth() === point.date.getMonth() &&
+                        bookingDate.getFullYear() === point.date.getFullYear();
+          } else {
+            isInPeriod = bookingDate.getMonth() === point.date.getMonth() &&
+                        bookingDate.getFullYear() === point.date.getFullYear();
+          }
 
-        if (daysDiff >= 0 && daysDiff < 7) {
-          weeklyStats[daysDiff].revenue += booking.fare || booking.amount || 0;
-          weeklyStats[daysDiff].bookings += 1;
-        }
+          if (isInPeriod) {
+            point.revenue += booking.fare || booking.amount || 0;
+            point.bookings += 1;
+          }
+        });
       }
     });
 
+    // Calculate growth rates
+    if (dataPoints.length >= 2) {
+      const recent = dataPoints.slice(-2);
+      const currentRevenue = recent[1].revenue || 0;
+      const previousRevenue = recent[0].revenue || 0;
+      const currentBookings = recent[1].bookings || 0;
+      const previousBookings = recent[0].bookings || 0;
 
-    return weeklyStats;
+      const revenueGrowth = previousRevenue === 0 
+        ? (currentRevenue > 0 ? 100 : 0)
+        : ((currentRevenue - previousRevenue) / previousRevenue * 100);
+        
+      const bookingsGrowth = previousBookings === 0 
+        ? (currentBookings > 0 ? 100 : 0)
+        : ((currentBookings - previousBookings) / previousBookings * 100);
+
+      setRevenueGrowthData({
+        revenueGrowth: Math.round(revenueGrowth * 10) / 10,
+        bookingsGrowth: Math.round(bookingsGrowth * 10) / 10
+      });
+    }
+
+    return dataPoints;
   };
 
+  // Filter bookings based on search term and status
+  const filterBookings = (searchTerm, status) => {
+    let filtered = allBookingsTable;
+
+    // Filter by search term (ID, pickup, dropoff, driver, client)
+    if (searchTerm) {
+      filtered = filtered.filter(booking => 
+        booking.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (booking.pickupLocation && booking.pickupLocation.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (booking.dropoffLocation && booking.dropoffLocation.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (booking.driverId && booking.driverId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (booking.clientId && booking.clientId.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    // Filter by status
+    if (status !== 'all') {
+      filtered = filtered.filter(booking => booking.status === status);
+    }
+
+    setFilteredBookings(filtered);
+  };
+
+  // Handle booking search input change
+  const handleBookingSearchChange = (e) => {
+    const searchTerm = e.target.value;
+    setBookingFilter(searchTerm);
+    filterBookings(searchTerm, statusFilter);
+  };
+
+  // Handle booking status filter change
+  const handleBookingStatusFilterChange = (status) => {
+    setStatusFilter(status);
+    filterBookings(bookingFilter, status);
+  };
 
   // Main function to fetch all dashboard data
   const fetchDashboardData = async () => {
@@ -315,6 +469,8 @@ function DashboardContent() {
       // Fetch bookings data
       const bookingsStats = await fetchBookingsData();
 
+      // Store all bookings for revenue chart
+      setAllBookings(bookingsStats.allBookings);
 
       // Fetch KYC documents and vehicles for each driver
       const driversWithDetails = await Promise.all(
@@ -452,12 +608,13 @@ function DashboardContent() {
       setRecentBookings(bookingsStats.recentBookings);
 
 
-      // Generate monthly registration data
-      const monthlyData = generateMonthlyRegistrationData(
-        driversWithDetails,
-        clientsData
+      // Generate dynamic registration data
+      const dynamicChartData = generateDynamicRegistrationData(
+        driversData,
+        clientsData,
+        chartTimePeriod
       );
-      setChartData(monthlyData);
+      setChartData(dynamicChartData);
 
 
       // Updated pie chart data for KYC status distribution
@@ -471,10 +628,15 @@ function DashboardContent() {
 
 
       // Generate dynamic revenue data based on actual bookings
-      const weeklyRevenueData = generateWeeklyRevenueData(
-        bookingsStats.recentBookings
+      const dynamicRevenueData = generateDynamicRevenueData(
+        bookingsStats.allBookings,
+        revenueTimePeriod
       );
-      setRevenueData(weeklyRevenueData);
+      setRevenueData(dynamicRevenueData);
+
+      // Set all bookings for the bookings table
+      setAllBookingsTable(bookingsStats.allBookings);
+      setFilteredBookings(bookingsStats.allBookings);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -483,61 +645,177 @@ function DashboardContent() {
   };
 
 
-  // Generate monthly registration data based on creation dates
-  const generateMonthlyRegistrationData = (drivers, clients) => {
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    const currentYear = new Date().getFullYear();
-
-
-    const monthlyStats = months.map((month) => ({
-      month,
-      drivers: 0,
-      clients: 0,
-    }));
-
-
-    // Count drivers by month
-    drivers.forEach((driver) => {
-      if (driver.createdAt) {
-        const date = driver.createdAt.toDate
-          ? driver.createdAt.toDate()
-          : new Date(driver.createdAt);
-        if (date.getFullYear() === currentYear) {
-          const monthIndex = date.getMonth();
-          monthlyStats[monthIndex].drivers++;
+  // Enhanced Generate registration data with dynamic time periods
+  const generateDynamicRegistrationData = (drivers, clients, timePeriod) => {
+    const now = new Date();
+    let startDate, endDate, dateFormat, groupBy;
+    
+    switch (timePeriod) {
+      case '6months':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        dateFormat = 'month';
+        groupBy = 'month';
+        break;
+      case '12months':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        dateFormat = 'month';
+        groupBy = 'month';
+        break;
+      case 'currentYear':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        endDate = new Date(now.getFullYear(), 11, 31);
+        dateFormat = 'month';
+        groupBy = 'month';
+        break;
+      case 'allTime':
+        // Find the earliest registration date
+        const allDates = [...drivers, ...clients]
+          .map(user => {
+            if (user.createdAt) {
+              return user.createdAt.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
+            }
+            return null;
+          })
+          .filter(date => date !== null);
+        
+        if (allDates.length > 0) {
+          const earliestDate = new Date(Math.min(...allDates));
+          startDate = new Date(earliestDate.getFullYear(), 0, 1);
+        } else {
+          startDate = new Date(now.getFullYear() - 2, 0, 1);
         }
+        endDate = new Date(now.getFullYear(), 11, 31);
+        dateFormat = 'year';
+        groupBy = 'year';
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        dateFormat = 'month';
+        groupBy = 'month';
+    }
+
+    const dataPoints = [];
+    const current = new Date(startDate);
+
+    while (current <= endDate) {
+      let label, key;
+      
+      if (groupBy === 'month') {
+        label = current.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        key = `${current.getFullYear()}-${current.getMonth()}`;
+      } else {
+        label = current.getFullYear().toString();
+        key = current.getFullYear().toString();
       }
+
+      dataPoints.push({
+        period: label,
+        key: key,
+        drivers: 0,
+        clients: 0,
+        total: 0
+      });
+
+      if (groupBy === 'month') {
+        current.setMonth(current.getMonth() + 1);
+      } else {
+        current.setFullYear(current.getFullYear() + 1);
+      }
+    }
+
+    // Count registrations for each period
+    const countRegistrations = (users, userType) => {
+      users.forEach(user => {
+        if (user.createdAt) {
+          const date = user.createdAt.toDate ? user.createdAt.toDate() : new Date(user.createdAt);
+          
+          if (date >= startDate && date <= endDate) {
+            let periodKey;
+            
+            if (groupBy === 'month') {
+              periodKey = `${date.getFullYear()}-${date.getMonth()}`;
+            } else {
+              periodKey = date.getFullYear().toString();
+            }
+
+            const dataPoint = dataPoints.find(dp => dp.key === periodKey);
+            if (dataPoint) {
+              dataPoint[userType]++;
+              dataPoint.total++;
+            }
+          }
+        }
+      });
+    };
+
+    countRegistrations(drivers, 'drivers');
+    countRegistrations(clients, 'clients');
+
+    // Calculate growth rates
+    const calculateGrowth = (data, field) => {
+      if (data.length < 2) return 0;
+      
+      const recent = data.slice(-2);
+      const current = recent[1][field] || 0;
+      const previous = recent[0][field] || 0;
+      
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous * 100);
+    };
+
+    const driversGrowth = calculateGrowth(dataPoints, 'drivers');
+    const clientsGrowth = calculateGrowth(dataPoints, 'clients');
+    const totalGrowth = calculateGrowth(dataPoints, 'total');
+
+    setChartGrowthData({
+      driversGrowth: Math.round(driversGrowth * 10) / 10,
+      clientsGrowth: Math.round(clientsGrowth * 10) / 10,
+      totalGrowth: Math.round(totalGrowth * 10) / 10
     });
 
+    return dataPoints;
+  };
 
-    // Count clients by month
-    clients.forEach((client) => {
-      if (client.createdAt) {
-        const date = client.createdAt.toDate
-          ? client.createdAt.toDate()
-          : new Date(client.createdAt);
-        if (date.getFullYear() === currentYear) {
-          const monthIndex = date.getMonth();
-          monthlyStats[monthIndex].clients++;
-        }
-      }
-    });
+  // Handle time period change
+  const handleTimePeriodChange = (period) => {
+    setChartTimePeriod(period);
+    // Regenerate chart data with new time period
+    if (allUsers.length > 0) {
+      const driversData = allUsers.filter((user) => user.role === "driver");
+      const clientsData = allUsers.filter(
+        (user) =>
+          user.role === "client" || user.role === "customer" || user.role === "rider" || !user.role
+      );
+      
+      const dynamicChartData = generateDynamicRegistrationData(
+        driversData,
+        clientsData,
+        period
+      );
+      setChartData(dynamicChartData);
+    }
+  };
 
+  // Handle revenue time period change
+  const handleRevenueTimePeriodChange = (period) => {
+    setRevenueTimePeriod(period);
+    if (allBookings.length > 0) {
+      const dynamicRevenueData = generateDynamicRevenueData(allBookings, period);
+      setRevenueData(dynamicRevenueData);
+    }
+  };
 
-    return monthlyStats.slice(0, 6); // Show last 6 months
+  // Navigate to drivers page
+  const navigateToDrivers = () => {
+    router.push('/drivers');
+  };
+
+  // Navigate to users page
+  const navigateToUsers = () => {
+    router.push('/users');
   };
 
 
@@ -721,13 +999,80 @@ function DashboardContent() {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Registration Trends */}
+        {/* Enhanced Registration Trends */}
         <Card>
           <CardHeader>
-            <CardTitle>Registration Trends</CardTitle>
-            <CardDescription>
-              Driver and client registrations over time
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5" />
+                  Registration Trends
+                </CardTitle>
+                <CardDescription>
+                  Driver and client registrations over time
+                </CardDescription>
+              </div>
+              
+              {/* Time Period Selector */}
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { key: '6months', label: '6M' },
+                  { key: '12months', label: '12M' },
+                  { key: 'currentYear', label: 'Year' },
+                  { key: 'allTime', label: 'All' }
+                ].map((period) => (
+                  <Button
+                    key={period.key}
+                    variant={chartTimePeriod === period.key ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleTimePeriodChange(period.key)}
+                    className="text-xs px-2 py-1"
+                  >
+                    {period.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Growth Indicators */}
+            <div className="grid grid-cols-3 gap-4 mt-4 p-3 bg-gray-50 rounded-lg">
+              <div className="text-center">
+                <div className="text-xs text-gray-500">Drivers Growth</div>
+                <div className={`text-sm font-semibold flex items-center justify-center gap-1 ${
+                  chartGrowthData.driversGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {chartGrowthData.driversGrowth >= 0 ? 
+                    <TrendingUp className="h-3 w-3" /> : 
+                    <TrendingDown className="h-3 w-3" />
+                  }
+                  {Math.abs(chartGrowthData.driversGrowth)}%
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">Clients Growth</div>
+                <div className={`text-sm font-semibold flex items-center justify-center gap-1 ${
+                  chartGrowthData.clientsGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {chartGrowthData.clientsGrowth >= 0 ? 
+                    <TrendingUp className="h-3 w-3" /> : 
+                    <TrendingDown className="h-3 w-3" />
+                  }
+                  {Math.abs(chartGrowthData.clientsGrowth)}%
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-gray-500">Total Growth</div>
+                <div className={`text-sm font-semibold flex items-center justify-center gap-1 ${
+                  chartGrowthData.totalGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {chartGrowthData.totalGrowth >= 0 ? 
+                    <TrendingUp className="h-3 w-3" /> : 
+                    <TrendingDown className="h-3 w-3" />
+                  }
+                  {Math.abs(chartGrowthData.totalGrowth)}%
+                </div>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -740,16 +1085,47 @@ function DashboardContent() {
                   label: "Clients",
                   color: "#10b981",
                 },
+                total: {
+                  label: "Total",
+                  color: "#8b5cf6",
+                },
               }}
-              className="h-[300px]"
+              className="h-[350px]"
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="drivers" fill="#3b82f6" radius={4} />
-                  <Bar dataKey="clients" fill="#10b981" radius={4} />
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis 
+                    dataKey="period" 
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis fontSize={12} />
+                  <ChartTooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-white p-3 border rounded-lg shadow-lg">
+                            <p className="font-semibold text-gray-900">{label}</p>
+                            {payload.map((entry, index) => (
+                              <p key={index} style={{ color: entry.color }} className="text-sm">
+                                {entry.name}: {entry.value}
+                              </p>
+                            ))}
+                            <p className="text-sm text-gray-600 border-t pt-1 mt-1">
+                              Total: {payload.reduce((sum, entry) => 
+                                entry.dataKey !== 'total' ? sum + entry.value : sum, 0
+                              )}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="drivers" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="clients" fill="#10b981" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartContainer>
@@ -803,10 +1179,66 @@ function DashboardContent() {
       {/* Revenue Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Weekly Revenue & Bookings</CardTitle>
-          <CardDescription>
-            Revenue and booking trends for the past week
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Revenue & Bookings Trends</CardTitle>
+              <CardDescription>
+                Revenue and booking trends for the selected period
+              </CardDescription>
+            </div>
+            
+            {/* Time Period Selection */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'week', label: 'This Week' },
+                { key: 'month', label: 'This Month' },
+                { key: '3months', label: '3 Months' },
+                { key: '6months', label: '6 Months' },
+                { key: 'year', label: 'This Year' }
+              ].map((period) => (
+                <button
+                  key={period.key}
+                  onClick={() => handleRevenueTimePeriodChange(period.key)}
+                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                    revenueTimePeriod === period.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {period.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {/* Growth Indicators */}
+          <div className="flex flex-wrap gap-4 mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Revenue Growth:</span>
+              <div className={`flex items-center gap-1 text-sm font-medium ${
+                revenueGrowthData.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {revenueGrowthData.revenueGrowth >= 0 ? 
+                  <TrendingUp className="h-3 w-3" /> : 
+                  <TrendingDown className="h-3 w-3" />
+                }
+                {Math.abs(revenueGrowthData.revenueGrowth)}%
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Bookings Growth:</span>
+              <div className={`flex items-center gap-1 text-sm font-medium ${
+                revenueGrowthData.bookingsGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {revenueGrowthData.bookingsGrowth >= 0 ? 
+                  <TrendingUp className="h-3 w-3" /> : 
+                  <TrendingDown className="h-3 w-3" />
+                }
+                {Math.abs(revenueGrowthData.bookingsGrowth)}%
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <ChartContainer
@@ -824,9 +1256,41 @@ function DashboardContent() {
           >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueData}>
-                <XAxis dataKey="day" />
-                <YAxis />
-                <ChartTooltip content={<ChartTooltipContent />} />
+                <XAxis 
+                  dataKey="period" 
+                  fontSize={12}
+                  angle={revenueTimePeriod === 'month' ? -45 : 0}
+                  textAnchor={revenueTimePeriod === 'month' ? 'end' : 'middle'}
+                  height={revenueTimePeriod === 'month' ? 60 : 30}
+                />
+                <YAxis fontSize={12} />
+                <ChartTooltip 
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                          <p className="font-medium text-gray-900 mb-2">{label}</p>
+                          {payload.map((entry, index) => (
+                            <div key={index} className="flex items-center gap-2 text-sm">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: entry.color }}
+                              ></div>
+                              <span className="text-gray-600">{entry.dataKey}:</span>
+                              <span className="font-medium">
+                                {entry.dataKey === 'revenue' 
+                                  ? `$${entry.value.toLocaleString()}` 
+                                  : entry.value
+                                }
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
                 <Area
                   type="monotone"
                   dataKey="revenue"
@@ -1067,8 +1531,9 @@ function DashboardContent() {
       </Card>
     </div>
   );
-}
 
+
+}
 
 export default function Dashboard() {
   return (
