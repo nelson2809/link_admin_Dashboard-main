@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
+import toast, { Toaster } from 'react-hot-toast';
 import {
   Eye, Download, FileText, Car, CheckCircle, XCircle, Clock, User, MoreVertical, 
   Filter, Search, ArrowUpDown, X, ZoomIn, ZoomOut, AlertTriangle
@@ -54,7 +55,6 @@ export default function DriversAdminPage() {
   // KYC Rejection Modal States
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [allowResubmission, setAllowResubmission] = useState(false);
   const [currentDriverId, setCurrentDriverId] = useState(null);
@@ -406,7 +406,7 @@ export default function DriversAdminPage() {
   };
 
   // Enhanced Update KYC Status with Resubmission Support
-  const updateKYCStatus = async (driverId, approved, reason = null, allowResubmission = false) => {
+  const updateKYCStatus = async (driverId, approved, reason = null, allowResubmission = false, showToast = true) => {
     try {
       const updateData = {
         kyc_approved: approved,
@@ -459,11 +459,31 @@ export default function DriversAdminPage() {
       const actionText = approved ? 'approved' : (allowResubmission ? 'rejected (resubmission allowed)' : 'rejected');
       console.log(`KYC ${actionText} successfully for driver ${driverId}`);
       
-      // Show success message
-      alert(`KYC ${actionText} successfully!`);
+      // Only show toast if explicitly requested (for direct button clicks, not modal workflow)
+      if (showToast) {
+        toast.success(`KYC ${actionText} successfully!`, {
+          duration: 4000,
+          position: 'top-right',
+          style: {
+            background: approved ? '#10B981' : '#EF4444',
+            color: '#fff',
+            fontWeight: '500',
+          },
+          icon: approved ? '✅' : '❌',
+        });
+      }
     } catch (error) {
       console.error('Error updating KYC status:', error);
-      alert('Error updating KYC status. Please try again.');
+      toast.error('Error updating KYC status. Please try again.', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: '❌',
+      });
     }
   };
 
@@ -485,22 +505,58 @@ export default function DriversAdminPage() {
     setShowConfirmModal(false);
     
     try {
-      await updateKYCStatus(currentDriverId, false, rejectionReason, allowResubmission);
-      setShowSuccessModal(true);
+      // Pass showToast = false to prevent duplicate toast from updateKYCStatus
+      await updateKYCStatus(currentDriverId, false, rejectionReason, allowResubmission, false);
+      
+      // Show success toast instead of modal
+      if (allowResubmission) {
+        toast.success('KYC rejected (resubmission allowed) successfully!', {
+          duration: 4000,
+          position: 'top-right',
+          style: {
+            background: '#10B981',
+            color: '#fff',
+            fontWeight: '500',
+          },
+          icon: '✅',
+        });
+      } else {
+        toast.success('KYC rejected successfully!', {
+          duration: 4000,
+          position: 'top-right',
+          style: {
+            background: '#EF4444',
+            color: '#fff',
+            fontWeight: '500',
+          },
+          icon: '❌',
+        });
+      }
+      
+      // Reset modal states
+      resetModalStates();
       
       if (modalCloseCallback) {
         modalCloseCallback();
       }
     } catch (error) {
       console.error('Error rejecting KYC:', error);
-      // You can add error handling here
+      toast.error('Failed to reject KYC. Please try again.', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: '❌',
+      });
     }
   };
 
   const resetModalStates = () => {
     setShowRejectModal(false);
     setShowConfirmModal(false);
-    setShowSuccessModal(false);
     setRejectionReason('');
     setAllowResubmission(false);
     setCurrentDriverId(null);
@@ -524,8 +580,29 @@ export default function DriversAdminPage() {
           driver.id === driverId ? { ...driver, is_active: newStatus } : driver
         )
       );
+
+      toast.success(`Driver ${newStatus ? 'activated' : 'deactivated'} successfully!`, {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: newStatus ? '#10B981' : '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: newStatus ? '✅' : '❌',
+      });
     } catch (error) {
       console.error('Error updating driver status:', error);
+      toast.error('Error updating driver status. Please try again.', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: '❌',
+      });
     }
   };
 
@@ -551,14 +628,48 @@ export default function DriversAdminPage() {
       );
 
       console.log(`Vehicle ${isActive ? 'activated' : 'deactivated'} successfully for driver ${driverId}`);
+      
+      toast.success(`Vehicle ${isActive ? 'activated' : 'deactivated'} successfully!`, {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: isActive ? '#10B981' : '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: isActive ? '✅' : '❌',
+      });
     } catch (error) {
       console.error('Error updating vehicle status:', error);
-      alert('Error updating vehicle status. Please try again.');
+      toast.error('Error updating vehicle status. Please try again.', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: '❌',
+      });
     }
   };
 
   // Enhanced download function - Updated with better error handling and CORS support
   const downloadDocument = async (url, filename) => {
+    if (!url) {
+      toast.error('No document URL available', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: '❌',
+      });
+      return;
+    }
+
     try {
       // First, try to fetch with proper headers
       const response = await fetch(url, {
@@ -626,7 +737,16 @@ export default function DriversAdminPage() {
           }, 1000);
         } catch (finalError) {
           console.error('All download methods failed:', finalError);
-          alert('Download failed. The file might be protected or the URL is invalid. Please try opening the document in a new tab.');
+          toast.error('Download failed. The file might be protected or the URL is invalid. Please try opening the document in a new tab.', {
+            duration: 6000,
+            position: 'top-right',
+            style: {
+              background: '#EF4444',
+              color: '#fff',
+              fontWeight: '500',
+            },
+            icon: '❌',
+          });
         }
       }
     }
@@ -892,6 +1012,9 @@ export default function DriversAdminPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Add Toaster component */}
+      <Toaster />
+      
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Drivers Management</h1>
@@ -1681,43 +1804,7 @@ export default function DriversAdminPage() {
         </div>
       )}
 
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <div className="flex-shrink-0">
-                  <CheckCircle className="h-6 w-6 text-green-500" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    KYC Rejection Successful
-                  </h3>
-                </div>
-              </div>
-              
-              <div className="mb-6">
-                <p className="text-sm text-gray-600">
-                  {allowResubmission 
-                    ? 'KYC rejected (resubmission allowed) successfully. The driver can now upload new documents.'
-                    : 'KYC rejected successfully. The driver cannot resubmit documents.'
-                  }
-                </p>
-              </div>
 
-              <div className="flex justify-end">
-                <Button
-                  onClick={resetModalStates}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white"
-                >
-                  Done
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
