@@ -104,7 +104,7 @@ export function AppSidebar() {
       <SidebarContent className="py-4 no-scrollbar overflow-y-auto">
         {/* Main Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel className="px-4 text-sm font-medium text-muted-foreground">Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-4 text-sm font-medium text-muted-foreground"></SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
