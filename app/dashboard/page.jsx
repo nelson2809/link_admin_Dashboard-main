@@ -276,7 +276,6 @@ function DashboardContent() {
     }
   };
 
-
   // Enhanced Generate dynamic revenue data with multiple time periods
   const generateDynamicRevenueData = (bookings, timePeriod) => {
     const now = new Date();
@@ -457,7 +456,6 @@ function DashboardContent() {
       setAllUsers(usersData);
       setFilteredUsers(usersData);
 
-
       // Separate drivers and clients based on role
       const driversData = usersData.filter((user) => user.role === "driver");
       const clientsData = usersData.filter(
@@ -537,7 +535,6 @@ function DashboardContent() {
       const activeDrivers = driversWithDetails.filter(
         (d) => d.is_active !== false
       ).length;
-
 
       // KYC Statistics using the same logic as your drivers table
       let kycVerified = 0;
@@ -818,7 +815,6 @@ function DashboardContent() {
     router.push('/users');
   };
 
-
   if (loading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -848,19 +844,16 @@ function DashboardContent() {
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">KYC Verified</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {stats.totalClients}
+            <div className="text-2xl font-bold text-green-600">
+              {stats.kycVerified}
             </div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <TrendingUp className="w-3 h-3 mr-1" />
-              Registered users
-            </p>
+            <p className="text-xs text-muted-foreground">Approved drivers</p>
           </CardContent>
         </Card>
 
@@ -921,19 +914,8 @@ function DashboardContent() {
 
 
       {/* Driver Management Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">KYC Verified</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.kycVerified}
-            </div>
-            <p className="text-xs text-muted-foreground">Approved drivers</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+       
 
 
         <Card>
@@ -996,9 +978,8 @@ function DashboardContent() {
         </Card>
       </div>
 
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts Section - Changed to Single Column */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Enhanced Registration Trends */}
         <Card>
           <CardHeader>
@@ -1175,7 +1156,6 @@ function DashboardContent() {
         </Card>
       </div>
 
-
       {/* Revenue Chart */}
       <Card>
         <CardHeader>
@@ -1310,7 +1290,6 @@ function DashboardContent() {
         </CardContent>
       </Card>
 
-
       {/* Users Table */}
       <Card>
         <CardHeader>
@@ -1434,7 +1413,6 @@ function DashboardContent() {
         </CardContent>
       </Card>
 
-
       {/* Recent Activity */}
       <Card>
         <CardHeader>
@@ -1531,8 +1509,6 @@ function DashboardContent() {
       </Card>
     </div>
   );
-
-
 }
 
 export default function Dashboard() {
