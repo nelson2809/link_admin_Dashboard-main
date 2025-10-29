@@ -48,6 +48,16 @@ import {
   AlertTriangle,
   X
 } from 'lucide-react';
+import Pagination from '@/components/ui/pagination';
+import { usePagination } from '../../lib/hooks/usePagination';
+
+// Helper function - moved to top
+const getRatingBadgeColor = (rating) => {
+  if (rating >= 4) return 'bg-green-100 text-green-800 border-green-200';
+  if (rating >= 3) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+  if (rating >= 2) return 'bg-orange-100 text-orange-800 border-orange-200';
+  return 'bg-red-100 text-red-800 border-red-200';
+};
 
 // Custom Confirmation Modal Component
 const ConfirmationModal = ({ 
@@ -89,7 +99,21 @@ const ConfirmationModal = ({
   const typeStyles = getTypeStyles();
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed bg-black bg-opacity-50 flex items-center justify-center overflow-auto"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        margin: 0,
+        padding: 0,
+        zIndex: 9999
+      }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-in fade-in zoom-in duration-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b">
@@ -110,7 +134,7 @@ const ConfirmationModal = ({
 
         {/* Modal Body */}
         <div className="p-6">
-          <p className="text-gray-600 leading-relaxed">{message}</p>
+          <p className="text-gray-600 leading-relaxed whitespace-pre-line">{message}</p>
         </div>
 
         {/* Modal Footer */}
@@ -148,7 +172,21 @@ const ReviewDetailModal = ({ isOpen, onClose, feedback }) => {
   if (!isOpen || !feedback) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed bg-black bg-opacity-50 flex items-center justify-center overflow-auto"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        margin: 0,
+        padding: 0,
+        zIndex: 9999
+      }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 animate-in fade-in zoom-in duration-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-6 border-b">
@@ -166,7 +204,7 @@ const ReviewDetailModal = ({ isOpen, onClose, feedback }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Booking ID</label>
-              <code className="bg-gray-100 px-3 py-2 rounded text-sm block">
+              <code className="bg-gray-100 px-3 py-2 rounded text-sm block break-all">
                 {feedback.bookingId || 'N/A'}
               </code>
             </div>
@@ -259,6 +297,13 @@ const FeedbackPage = () => {
     ratingDistribution: {
       5: 0, 4: 0, 3: 0, 2: 0, 1: 0
     }
+  });
+
+  // Pagination hook with same configuration as other pages
+  const pagination = usePagination(filteredFeedbacks, {
+    initialItemsPerPage: 10,
+    itemsPerPageOptions: [5, 10, 20, 50],
+    resetPageOnDataChange: true
   });
 
   useEffect(() => {
@@ -398,13 +443,6 @@ const FeedbackPage = () => {
         }`}
       />
     ));
-  };
-
-  const getRatingBadgeColor = (rating) => {
-    if (rating >= 4) return 'bg-green-100 text-green-800 border-green-200';
-    if (rating >= 3) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    if (rating >= 2) return 'bg-orange-100 text-orange-800 border-orange-200';
-    return 'bg-red-100 text-red-800 border-red-200';
   };
 
   const formatDate = (timestamp) => {
@@ -574,98 +612,110 @@ const FeedbackPage = () => {
               <p className="text-gray-500">No feedback found matching your criteria</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Booking ID</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Driver</TableHead>
-                    <TableHead>Rating</TableHead>
-                    <TableHead>Review</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredFeedbacks.map((feedback) => (
-                    <TableRow key={feedback.id}>
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                          {formatDate(feedback.createdAt)}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <code className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">
-                          {feedback.bookingId?.substring(0, 8) || 'N/A'}...
-                        </code>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          <User className="w-4 h-4 mr-2 text-gray-400" />
-                          <span className="truncate max-w-[100px] font-mono text-xs" title={feedback.userId}>
-                            {feedback.userId?.substring(0, 8) || 'N/A'}...
-                          </span>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          <Car className="w-4 h-4 mr-2 text-gray-400" />
-                          <span className="truncate max-w-[100px] font-mono text-xs" title={feedback.driverId}>
-                            {feedback.driverId?.substring(0, 8) || 'N/A'}...
-                          </span>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Badge className={`${getRatingBadgeColor(feedback.rating || 0)} border`}>
-                            {feedback.rating || 0}/5
-                          </Badge>
-                          <div className="flex">
-                            {renderStars(feedback.rating || 0)}
-                          </div>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="max-w-xs">
-                          <p className="text-sm truncate" title={feedback.review}>
-                            {feedback.review || 'No review provided'}
-                          </p>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewReview(feedback)}
-                            title="View full review"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteClick(feedback)}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                            title="Delete feedback"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Booking ID</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Driver</TableHead>
+                      <TableHead>Rating</TableHead>
+                      <TableHead>Review</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {pagination.paginatedData.map((feedback) => (
+                      <TableRow key={feedback.id}>
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                            {formatDate(feedback.createdAt)}
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <code className="bg-gray-100 px-2 py-1 rounded text-xs font-mono">
+                            {feedback.bookingId?.substring(0, 8) || 'N/A'}...
+                          </code>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            <User className="w-4 h-4 mr-2 text-gray-400" />
+                            <span className="truncate max-w-[100px] font-mono text-xs" title={feedback.userId}>
+                              {feedback.userId?.substring(0, 8) || 'N/A'}...
+                            </span>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            <Car className="w-4 h-4 mr-2 text-gray-400" />
+                            <span className="truncate max-w-[100px] font-mono text-xs" title={feedback.driverId}>
+                              {feedback.driverId?.substring(0, 8) || 'N/A'}...
+                            </span>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Badge className={`${getRatingBadgeColor(feedback.rating || 0)} border`}>
+                              {feedback.rating || 0}/5
+                            </Badge>
+                            <div className="flex">
+                              {renderStars(feedback.rating || 0)}
+                            </div>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="max-w-xs">
+                            <p className="text-sm truncate" title={feedback.review}>
+                              {feedback.review || 'No review provided'}
+                            </p>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewReview(feedback)}
+                              title="View full review"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteClick(feedback)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              title="Delete feedback"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Enhanced Pagination Controls - Matching Previous Pages */}
+              <Pagination
+                {...pagination.paginationProps}
+                className="mt-4"
+                showItemsPerPage={true}
+                showPageInfo={true}
+                showPageNumbers={true}
+                maxPageNumbers={5}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -695,14 +745,6 @@ Review: "${confirmModal.feedbackDetails.review || 'No review'}"` : ''}`}
       />
     </div>
   );
-};
-
-// Helper function moved outside component to fix reference error
-const getRatingBadgeColor = (rating) => {
-  if (rating >= 4) return 'bg-green-100 text-green-800 border-green-200';
-  if (rating >= 3) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-  if (rating >= 2) return 'bg-orange-100 text-orange-800 border-orange-200';
-  return 'bg-red-100 text-red-800 border-red-200';
 };
 
 export default FeedbackPage;

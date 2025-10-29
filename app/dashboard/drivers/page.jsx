@@ -5,7 +5,7 @@ import { db } from '../../lib/firebase/config';
 import toast, { Toaster } from 'react-hot-toast';
 import {
   Eye, Download, FileText, Car, CheckCircle, XCircle, Clock, User, MoreVertical, 
-  Filter, Search, ArrowUpDown, X, ZoomIn, ZoomOut, AlertTriangle
+  Filter, Search, ArrowUpDown, X, ZoomIn, ZoomOut, AlertTriangle, FilterX
 } from 'lucide-react';
 import {
   Table,
@@ -39,6 +39,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+// ADDED: Pagination imports
+import Pagination from "@/components/ui/pagination";
+import { usePagination } from "../../lib/hooks/usePagination";
 
 export default function DriversAdminPage() {
   const [drivers, setDrivers] = useState([]);
@@ -69,7 +72,14 @@ export default function DriversAdminPage() {
     status: ''
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-
+  
+  // ADDED: Pagination hook
+  const pagination = usePagination(filteredDrivers, {
+    initialItemsPerPage: 10,
+    itemsPerPageOptions: [5, 10, 20, 50],
+    resetPageOnDataChange: true
+  });
+  
   useEffect(() => {
     fetchDriversWithKycAndVehicles();
   }, []);
@@ -157,6 +167,18 @@ export default function DriversAdminPage() {
 
   const zoomOut = () => {
     setDocumentZoom(prev => Math.max(prev - 0.2, 0.5));
+  };
+
+  // UPDATED: Clear all table filters function
+  const clearAllFilters = () => {
+    setTableFilters({
+      name: '',
+      vehicle: '',
+      kycStatus: '',
+      vehicleStatus: '',
+      status: ''
+    });
+    setSortConfig({ key: null, direction: 'asc' });
   };
 
   // Apply table-specific filters
@@ -373,9 +395,13 @@ export default function DriversAdminPage() {
 
   // Get KYC Display Status Based on Boolean Field and Document Count
   const getKYCDisplayStatus = (kycApproved, kycStatus, documentCount) => {
+    // Explicitly handle zero-document case: show Not Submitted; never Pending
+    if (documentCount === 0) {
+      if (kycStatus === 'rejected' || kycApproved === false) return 'rejected';
+      return 'not-submitted';
+    }
     if (typeof kycApproved === 'boolean') {
       if (kycApproved) return 'verified';
-      // If explicitly rejected (false) and has kycStatus as rejected, show rejected
       if (kycStatus === 'rejected') return 'rejected';
       return 'pending';
     }
@@ -383,6 +409,13 @@ export default function DriversAdminPage() {
       return 'submitted';
     }
     return kycStatus || 'not-submitted';
+  };
+
+  // Helper: Check if all KYC documents are uploaded
+  const isKycSubmissionComplete = (kycDocuments) => {
+    const docs = kycDocuments ? Object.values(kycDocuments) : [];
+    if (docs.length === 0) return false;
+    return docs.every(doc => !!doc.url);
   };
 
   // Clear KYC documents for resubmission
@@ -654,7 +687,7 @@ export default function DriversAdminPage() {
     }
   };
 
-  // Enhanced download function - Updated with better error handling and CORS support
+  // UPDATED: Enhanced download function with proper local file saving
   const downloadDocument = async (url, filename) => {
     if (!url) {
       toast.error('No document URL available', {
@@ -855,9 +888,11 @@ export default function DriversAdminPage() {
           <IconComponent className="w-3 h-3" />
           {config.text}
         </span>
-        <p className={`text-xs font-medium ${config.countColor}`}>
-          KYC Documents ({documentCount})
-        </p>
+        {documentCount > 0 && (
+          <p className={`text-xs font-medium ${config.countColor}`}>
+            KYC Documents ({documentCount})
+          </p>
+        )}
       </div>
     );
   };
@@ -913,27 +948,41 @@ export default function DriversAdminPage() {
                 <div className="border-t border-gray-100 my-1"></div>
                 
                 {/* KYC Actions */}
-                {hasPendingKYC && displayStatus !== 'verified' && (
+                {displayStatus !== 'verified' && (
                   <>
-                    <button
-                      onClick={() => {
-                        updateKYCStatus(driver.id, true);
-                        setIsOpen(false);
-                      }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-green-700 hover:bg-green-50 transition-colors"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-3" />
-                      ✓ Verify KYC (Approve)
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleKYCRejection(driver.id, () => setIsOpen(false));
-                      }}
-                      className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50 transition-colors"
-                    >
-                      <XCircle className="w-4 h-4 mr-3" />
-                      ✗ Reject KYC
-                    </button>
+                    {isKycSubmissionComplete(driver.kycDocuments) ? (
+                      <button
+                        onClick={() => {
+                          updateKYCStatus(driver.id, true);
+                          setIsOpen(false);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-green-700 hover:bg-green-50 transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-3" />
+                        ✓ Verify KYC (Approve)
+                      </button>
+                    ) : (
+                      <div className="flex items-center w-full px-4 py-2 text-sm text-orange-700">
+                        <Clock className="w-4 h-4 mr-3" />
+                        Document submission pending
+                      </div>
+                    )}
+                    {displayStatus !== 'rejected' ? (
+                      <button
+                        onClick={() => {
+                          handleKYCRejection(driver.id, () => setIsOpen(false));
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50 transition-colors"
+                      >
+                        <XCircle className="w-4 h-4 mr-3" />
+                        ✗ Reject KYC
+                      </button>
+                    ) : (
+                      <div className="flex items-center w-full px-4 py-2 text-sm text-gray-500">
+                        <XCircle className="w-4 h-4 mr-3" />
+                        Already rejected
+                      </div>
+                    )}
                     <div className="border-t border-gray-100 my-1"></div>
                   </>
                 )}
@@ -1071,13 +1120,26 @@ export default function DriversAdminPage() {
         </Card>
       </div>
 
-      {/* Enhanced Table with In-Table Filters */}
+      {/* Enhanced Table with In-Table Filters and Clear All Button */}
       <Card>
         <CardHeader>
-          <CardTitle>Drivers ({filteredDrivers.length})</CardTitle>
-          <CardDescription>
-            Complete list of registered drivers with their verification status
-          </CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Drivers ({filteredDrivers.length})</CardTitle>
+              <CardDescription>
+                Complete list of registered drivers with their verification status
+              </CardDescription>
+            </div>
+            {/* ADDED: Clear All Filters Button */}
+            <Button
+              onClick={clearAllFilters}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <FilterX className="w-4 h-4" />
+              Clear All Filters
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
@@ -1186,115 +1248,153 @@ export default function DriversAdminPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDrivers.map((driver) => (
-                  <TableRow key={driver.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        {driver.photoUrl ? (
-                          <img
-                            src={driver.photoUrl}
-                            alt={driver.name}
-                            className="h-10 w-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <User className="h-4 w-4 text-gray-400" />
-                          </div>
-                        )}
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium leading-none">
-                            {driver.name || 'Unnamed Driver'}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {driver.email}
-                          </p>
-                          {driver.phone && (
-                            <p className="text-xs text-muted-foreground">
-                              {driver.phone}
-                            </p>
-                          )}
-                        </div>
+                {/* UPDATED: Show empty state when no data matches filters */}
+                {pagination.paginatedData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="text-gray-500">
+                        <p className="text-lg font-medium">No Drivers found matching your filters</p>
                       </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <div className="space-y-2">
-                        {driver.vehicle ? (
-                          <>
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">
-                                {driver.vehicle.brand} {driver.vehicle.model}
-                              </p>
-                              <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                                {driver.vehicle.category}
-                              </span>
-                              <p className="text-xs text-muted-foreground">
-                                {driver.vehicle.number}
-                              </p>
-                            </div>
-                            {getVehicleStatusBadge(driver.vehicleActive !== false)}
-                          </>
-                        ) : (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <Car className="h-4 w-4" />
-                            <span className="text-sm">No vehicle</span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <div className="space-y-2">
-                        {getKYCStatusBadgeWithCount(
-                          driver.kycStatus || 'not-submitted', 
-                          Object.keys(driver.kycDocuments || {}).length,
-                          driver
-                        )}
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <div className="space-y-2">
-                        {driver.vehicle ? (
-                          getVehicleStatusBadge(driver.vehicleActive !== false)
-                        ) : (
-                          <span className="text-xs text-gray-500">No vehicle</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <p className="text-sm">
-                        {driver.createdAt && driver.createdAt.toDate
-                          ? driver.createdAt.toDate().toLocaleDateString()
-                          : driver.addedAt || '—'}
-                      </p>
-                    </TableCell>
-                    
-                    <TableCell>
-                      <span className={`inline-block px-2 py-1 rounded-lg text-xs font-semibold ${
-                        driver.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {driver.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </TableCell>
-                    
-                    <TableCell className="text-right">
-                      <ActionsDropdown driver={driver} />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  pagination.paginatedData.map((driver) => (
+                    <TableRow key={driver.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          {driver.photoUrl ? (
+                            <img
+                              src={driver.photoUrl}
+                              alt={driver.name}
+                              className="h-10 w-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                              <User className="h-4 w-4 text-gray-400" />
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium leading-none">
+                              {driver.name || 'Unnamed Driver'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {driver.email}
+                            </p>
+                            {driver.phone && (
+                              <p className="text-xs text-muted-foreground">
+                                {driver.phone}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <div className="space-y-2">
+                          {driver.vehicle ? (
+                            <>
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">
+                                  {driver.vehicle.brand} {driver.vehicle.model}
+                                </p>
+                                <span className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                                  {driver.vehicle.category}
+                                </span>
+                                <p className="text-xs text-muted-foreground">
+                                  {driver.vehicle.number}
+                                </p>
+                              </div>
+                              {getVehicleStatusBadge(driver.vehicleActive !== false)}
+                            </>
+                          ) : (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Car className="h-4 w-4" />
+                              <span className="text-sm">No vehicle</span>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <div className="space-y-2">
+                          {getKYCStatusBadgeWithCount(
+                            driver.kycStatus || 'not-submitted', 
+                            Object.keys(driver.kycDocuments || {}).length,
+                            driver
+                          )}
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <div className="space-y-2">
+                          {driver.vehicle ? (
+                            getVehicleStatusBadge(driver.vehicleActive !== false)
+                          ) : (
+                            <span className="text-xs text-gray-500">No vehicle</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <p className="text-sm">
+                          {driver.createdAt && driver.createdAt.toDate
+                            ? driver.createdAt.toDate().toLocaleDateString()
+                            : driver.addedAt || '—'}
+                        </p>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <span className={`inline-block px-2 py-1 rounded-lg text-xs font-semibold ${
+                          driver.is_active
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {driver.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </TableCell>
+                      
+                      <TableCell className="text-right">
+                        <ActionsDropdown driver={driver} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
+            
+            {/* ADDED: Pagination Component */}
+            {filteredDrivers.length > 0 && (
+              <Pagination
+                {...pagination.paginationProps}
+                className="mt-4"
+                showItemsPerPage={true}
+                showPageInfo={true}
+                showPageNumbers={true}
+                maxPageNumbers={5}
+              />
+            )}
           </div>
         </CardContent>
       </Card>
 
+      {/* ALL YOUR EXISTING MODALS REMAIN EXACTLY THE SAME */}
       {/* Enhanced Document Viewer Modal */}
       {showDocuments && selectedDriver && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div 
+          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            margin: 0,
+            padding: 0,
+            zIndex: 9999
+          }}
+        >
           <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Driver Details - {selectedDriver.name}</h2>
@@ -1438,7 +1538,7 @@ export default function DriversAdminPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    KYC Documents ({Object.keys(selectedDriver.kycDocuments || {}).length})
+                    KYC Documents {Object.keys(selectedDriver.kycDocuments || {}).length > 0 && `(${Object.keys(selectedDriver.kycDocuments || {}).length})`}
                     <span className="ml-2">
                       {getStatusBadge(
                         selectedDriver.kyc_approved, 
@@ -1458,7 +1558,7 @@ export default function DriversAdminPage() {
                             <span className={`text-xs ${
                               docData.url ? 'text-green-600' : 'text-red-500'
                             }`}>
-                              {docData.url ? '✓ Submitted' : '✗ Not uploaded'}
+                              {docData.url ? '✅ Submitted' : '❌ Not uploaded'}
                             </span>
                           </div>
                           <div className="flex gap-2">
@@ -1476,21 +1576,21 @@ export default function DriversAdminPage() {
                                   View
                                 </button>
                                 <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                downloadDocument(
-                                  docData.url,
-                                  `${selectedDriver.name}_${docType}_KYC`
-                                );
-                              }}
-                              className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1 transition-colors"
-                              type="button"
-                              disabled={!docData.url}
-                            >
-                              <Download className="w-3 h-3" />
-                              Download
-                            </button>
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    downloadDocument(
+                                      docData.url,
+                                      `${selectedDriver.name}_${docType}_KYC`
+                                    );
+                                  }}
+                                  className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1 transition-colors"
+                                  type="button"
+                                  disabled={!docData.url}
+                                >
+                                  <Download className="w-3 h-3" />
+                                  Download
+                                </button>
                               </>
                             ) : (
                               <span className="text-xs text-gray-500 px-3 py-1 bg-gray-200 rounded">No file</span>
@@ -1511,27 +1611,41 @@ export default function DriversAdminPage() {
 
             {/* Action Buttons */}
             <div className="flex justify-center gap-4 mt-6">
-              {getKYCDisplayStatus(selectedDriver.kyc_approved, selectedDriver.kycStatus, Object.keys(selectedDriver.kycDocuments || {}).length) === 'pending' && (
+              {getKYCDisplayStatus(selectedDriver.kyc_approved, selectedDriver.kycStatus, Object.keys(selectedDriver.kycDocuments || {}).length) !== 'verified' && (
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      updateKYCStatus(selectedDriver.id, true);
-                      setShowDocuments(false);
-                    }}
-                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Approve KYC
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleKYCRejection(selectedDriver.id, () => setShowDocuments(false));
-                    }}
-                    className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2 transition-colors"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Reject KYC
-                  </button>
+                  {isKycSubmissionComplete(selectedDriver.kycDocuments) ? (
+                    <button
+                      onClick={() => {
+                        updateKYCStatus(selectedDriver.id, true);
+                        setShowDocuments(false);
+                      }}
+                      className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2 transition-colors"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve KYC
+                    </button>
+                  ) : (
+                    <span className="px-4 py-2 text-sm text-orange-700 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Document submission pending
+                    </span>
+                  )}
+                  {getKYCDisplayStatus(selectedDriver.kyc_approved, selectedDriver.kycStatus, Object.keys(selectedDriver.kycDocuments || {}).length) !== 'rejected' ? (
+                    <button
+                      onClick={() => {
+                        handleKYCRejection(selectedDriver.id, () => setShowDocuments(false));
+                      }}
+                      className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2 transition-colors"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject KYC
+                    </button>
+                  ) : (
+                    <span className="px-4 py-2 text-sm text-gray-500 flex items-center gap-2">
+                      <XCircle className="w-4 h-4" />
+                      Already rejected
+                    </span>
+                  )}
                 </div>
               )}
               
@@ -1576,7 +1690,21 @@ export default function DriversAdminPage() {
 
       {/* Small Document Viewer Modal - Updated for smaller size */}
       {showDocumentViewer && currentDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div 
+          className="fixed bg-black bg-opacity-80 flex items-center justify-center z-[9999]"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            margin: 0,
+            padding: 0,
+            zIndex: 9999
+          }}
+        >
           <div className="relative bg-white rounded-lg max-w-2xl max-h-[80vh] w-full mx-4 flex flex-col">
             {/* Header - Compact */}
             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-t-lg border-b">
@@ -1665,7 +1793,21 @@ export default function DriversAdminPage() {
 
       {/* Custom KYC Rejection Reason Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div 
+          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            margin: 0,
+            padding: 0,
+            zIndex: 9999
+          }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center mb-4">
@@ -1749,7 +1891,21 @@ export default function DriversAdminPage() {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div 
+          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            margin: 0,
+            padding: 0,
+            zIndex: 9999
+          }}
+        >
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center mb-4">
@@ -1803,7 +1959,6 @@ export default function DriversAdminPage() {
           </div>
         </div>
       )}
-
 
     </div>
   );

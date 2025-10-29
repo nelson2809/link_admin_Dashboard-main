@@ -49,6 +49,27 @@ import {
   X,
   AlertTriangle
 } from 'lucide-react';
+import Pagination from '@/components/ui/pagination';
+import { usePagination } from '../../lib/hooks/usePagination';
+
+// Helper functions - moved to top
+const isSubscriptionActive = (subscription) => {
+  if (!subscription.endDate) return false;
+  const endDate = subscription.endDate.toDate ? subscription.endDate.toDate() : new Date(subscription.endDate);
+  return endDate > new Date();
+};
+
+const getSubscriptionStatus = (subscription) => {
+  if (subscription.isDummy) return 'Test';
+  return isSubscriptionActive(subscription) ? 'Active' : 'Expired';
+};
+
+const getSubscriptionStatusColor = (subscription) => {
+  if (subscription.isDummy) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+  return isSubscriptionActive(subscription) 
+    ? 'bg-green-100 text-green-800 border-green-200' 
+    : 'bg-red-100 text-red-800 border-red-200';
+};
 
 // Confirmation Modal Component
 const ConfirmationModal = ({ 
@@ -90,7 +111,21 @@ const ConfirmationModal = ({
   const typeStyles = getTypeStyles();
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed bg-black bg-opacity-50 flex items-center justify-center overflow-auto"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        margin: 0,
+        padding: 0,
+        zIndex: 9999
+      }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center space-x-3">
@@ -146,7 +181,21 @@ const SubscriptionDetailModal = ({ isOpen, onClose, subscription }) => {
   if (!isOpen || !subscription) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed bg-black bg-opacity-50 flex items-center justify-center overflow-auto"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        margin: 0,
+        padding: 0,
+        zIndex: 9999
+      }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 animate-in fade-in zoom-in duration-200">
         <div className="flex items-center justify-between p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-900">Subscription Details</h3>
@@ -275,6 +324,13 @@ const SubscriptionPage = () => {
     totalRevenue: 0,
     dummySubscriptions: 0,
     planDistribution: {}
+  });
+
+  // Pagination hook with same configuration as other pages
+  const pagination = usePagination(filteredSubscriptions, {
+    initialItemsPerPage: 10,
+    itemsPerPageOptions: [5, 10, 20, 50],
+    resetPageOnDataChange: true
   });
 
   useEffect(() => {
@@ -543,9 +599,21 @@ const SubscriptionPage = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Plans</SelectItem>
-                {Object.keys(stats.planDistribution).map(plan => (
-                  <SelectItem key={plan} value={plan}>{plan}</SelectItem>
-                ))}
+                {Object.keys(stats.planDistribution)
+                  .sort((a, b) => {
+                    // Custom sorting function for plans
+                    const getPlanOrder = (plan) => {
+                      if (plan.includes('1 Ride')) return 1;
+                      if (plan.includes('6 Rides')) return 2;
+                      if (plan.includes('12 Rides')) return 3;
+                      if (plan.toLowerCase().includes('yearly')) return 4;
+                      return 5; // Any other plans go last
+                    };
+                    return getPlanOrder(a) - getPlanOrder(b);
+                  })
+                  .map(plan => (
+                    <SelectItem key={plan} value={plan}>{plan}</SelectItem>
+                  ))}
               </SelectContent>
             </Select>
 
@@ -603,113 +671,125 @@ const SubscriptionPage = () => {
               <p className="text-gray-500">No subscriptions found matching your criteria</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Payment Method</TableHead>
-                    <TableHead>Start Date</TableHead>
-                    <TableHead>End Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSubscriptions.map((subscription) => (
-                    <TableRow key={`${subscription.userId}-${subscription.id}`}>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium truncate max-w-[150px]" title={subscription.userEmail}>
-                            {subscription.userEmail}
-                          </p>
-                          <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
-                            {subscription.userId?.substring(0, 8)}...
-                          </code>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                            {subscription.plan || 'N/A'}
-                          </Badge>
-                          <code className="block text-xs text-gray-500">
-                            {subscription.planCode || 'N/A'}
-                          </code>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <span className="font-semibold text-green-600">
-                          ₹{subscription.price || 0}
-                        </span>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <CreditCard className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm capitalize">
-                            {subscription.method || 'N/A'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                          {formatDate(subscription.startDate)}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center text-sm">
-                          <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                          {formatDate(subscription.endDate)}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Badge className={getSubscriptionStatusColor(subscription)}>
-                            {getSubscriptionStatus(subscription)}
-                          </Badge>
-                          {subscription.isDummy && (
-                            <Badge className="bg-yellow-100 text-yellow-800 text-xs">
-                              Test
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewDetails(subscription)}
-                            title="View full details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteClick(subscription)}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                            title="Delete subscription"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Payment Method</TableHead>
+                      <TableHead>Start Date</TableHead>
+                      <TableHead>End Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {pagination.paginatedData.map((subscription) => (
+                      <TableRow key={`${subscription.userId}-${subscription.id}`}>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium truncate max-w-[150px]" title={subscription.userEmail}>
+                              {subscription.userEmail}
+                            </p>
+                            <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
+                              {subscription.userId?.substring(0, 8)}...
+                            </code>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                              {subscription.plan || 'N/A'}
+                            </Badge>
+                            <code className="block text-xs text-gray-500">
+                              {subscription.planCode || 'N/A'}
+                            </code>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <span className="font-semibold text-green-600">
+                            ₹{subscription.price || 0}
+                          </span>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <CreditCard className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm capitalize">
+                              {subscription.method || 'N/A'}
+                            </span>
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                            {formatDate(subscription.startDate)}
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center text-sm">
+                            <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                            {formatDate(subscription.endDate)}
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge className={getSubscriptionStatusColor(subscription)}>
+                              {getSubscriptionStatus(subscription)}
+                            </Badge>
+                            {subscription.isDummy && (
+                              <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+                                Test
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewDetails(subscription)}
+                              title="View full details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteClick(subscription)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              title="Delete subscription"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Enhanced Pagination Controls - Matching Previous Pages */}
+              <Pagination
+                {...pagination.paginationProps}
+                className="mt-4"
+                showItemsPerPage={true}
+                showPageInfo={true}
+                showPageNumbers={true}
+                maxPageNumbers={5}
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -740,25 +820,6 @@ Price: ₹${confirmModal.subscriptionDetails.price || 0}` : ''}`}
       />
     </div>
   );
-};
-
-// Helper functions
-const isSubscriptionActive = (subscription) => {
-  if (!subscription.endDate) return false;
-  const endDate = subscription.endDate.toDate ? subscription.endDate.toDate() : new Date(subscription.endDate);
-  return endDate > new Date();
-};
-
-const getSubscriptionStatus = (subscription) => {
-  if (subscription.isDummy) return 'Test';
-  return isSubscriptionActive(subscription) ? 'Active' : 'Expired';
-};
-
-const getSubscriptionStatusColor = (subscription) => {
-  if (subscription.isDummy) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-  return isSubscriptionActive(subscription) 
-    ? 'bg-green-100 text-green-800 border-green-200' 
-    : 'bg-red-100 text-red-800 border-red-200';
 };
 
 export default SubscriptionPage;

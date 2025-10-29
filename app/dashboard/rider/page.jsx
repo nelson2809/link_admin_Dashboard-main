@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
 import {
-  Eye, Search, ArrowUpDown, User, Phone, Calendar, MoreVertical, Filter
+  Eye, Search, ArrowUpDown, User, Phone, Calendar, MoreVertical, Filter, X
 } from 'lucide-react';
 import {
   Table,
@@ -20,6 +20,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import Pagination from '@/components/ui/pagination';
+import { usePagination } from '../../lib/hooks/usePagination';
 
 export default function RidersPage() {
   const [riders, setRiders] = useState([]);
@@ -36,6 +38,13 @@ export default function RidersPage() {
     updatedAt: ''
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // Pagination hook with same configuration as other pages
+  const pagination = usePagination(filteredRiders, {
+    initialItemsPerPage: 10,
+    itemsPerPageOptions: [5, 10, 20, 50],
+    resetPageOnDataChange: true
+  });
 
   useEffect(() => {
     fetchRiders();
@@ -150,7 +159,7 @@ export default function RidersPage() {
         ...doc.data()
       }));
 
-      console.log('Fetched riders:', ridersData); // Debug log
+      console.log('Fetched riders:', ridersData);
       setRiders(ridersData);
       setFilteredRiders(ridersData);
     } catch (error) {
@@ -186,7 +195,6 @@ export default function RidersPage() {
   // Format phone number for display
   const formatPhoneNumber = (phoneNumber) => {
     if (!phoneNumber) return 'N/A';
-    // Simple formatting - you can enhance this based on your needs
     return phoneNumber.replace(/(\+\d{2})(\d{10})/, '$1 $2');
   };
 
@@ -434,7 +442,7 @@ export default function RidersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRiders.map((rider) => (
+                {pagination.paginatedData.map((rider) => (
                   <TableRow key={rider.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
@@ -485,6 +493,18 @@ export default function RidersPage() {
             </Table>
           </div>
           
+          {/* Enhanced Pagination Controls - Matching Other Pages */}
+          {filteredRiders.length > 0 && (
+            <Pagination
+              {...pagination.paginationProps}
+              className="mt-4"
+              showItemsPerPage={true}
+              showPageInfo={true}
+              showPageNumbers={true}
+              maxPageNumbers={5}
+            />
+          )}
+          
           {filteredRiders.length === 0 && !loading && (
             <div className="text-center py-8">
               <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -506,19 +526,33 @@ export default function RidersPage() {
 
       {/* Rider Details Modal */}
       {showDetails && selectedRider && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div 
+          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            margin: 0,
+            padding: 0,
+            zIndex: 9999
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
               <h2 className="text-2xl font-bold">Rider Details</h2>
               <button
                 onClick={() => setShowDetails(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Username</label>
@@ -542,15 +576,15 @@ export default function RidersPage() {
                 </div>
                 <div className="col-span-2">
                   <label className="text-sm font-medium text-gray-700">User ID</label>
-                  <p className="text-sm font-mono bg-gray-100 p-2 rounded">{selectedRider.id}</p>
+                  <p className="text-sm font-mono bg-gray-100 p-2 rounded break-all">{selectedRider.id}</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end mt-6">
+            <div className="sticky bottom-0 bg-white border-t p-6 flex justify-end">
               <button
                 onClick={() => setShowDetails(false)}
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
               >
                 Close
               </button>
