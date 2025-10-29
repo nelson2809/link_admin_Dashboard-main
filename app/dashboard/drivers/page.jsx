@@ -112,22 +112,6 @@ export default function DriversAdminPage() {
     }
   };
 
-  // Helper function to get file extension - Enhanced
-  const getFileExtension = (url) => {
-    try {
-      // Remove query parameters and get the last part after the last dot
-      const cleanUrl = url.split('?')[0];
-      const extension = cleanUrl.split('.').pop().toLowerCase();
-      
-      // Validate common file extensions
-      const validExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'gif', 'doc', 'docx', 'txt'];
-      return validExtensions.includes(extension) ? extension : 'jpg';
-    } catch (error) {
-      console.error('Error getting file extension:', error);
-      return 'jpg';
-    }
-  };
-
   // Enhanced notification with better styling
   const showDownloadNotification = () => {
     // Remove any existing notifications
@@ -687,7 +671,7 @@ export default function DriversAdminPage() {
     }
   };
 
-  // UPDATED: Enhanced download function with proper local file saving
+  // UPDATED: Enhanced download function using API proxy
   const downloadDocument = async (url, filename) => {
     if (!url) {
       toast.error('No document URL available', {
@@ -704,84 +688,39 @@ export default function DriversAdminPage() {
     }
 
     try {
-      // First, try to fetch with proper headers
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-        },
-        mode: 'cors'
-      });
+      // Use the API proxy route to download the file
+      const proxyUrl = `/api/download-image?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
+      // Create a temporary anchor element
       const link = document.createElement('a');
+      link.href = proxyUrl;
+      link.download = filename;
       link.style.display = 'none';
-      link.href = downloadUrl;
       
-      // Get file extension from URL or default to jpg
-      const fileExtension = getFileExtension(url);
-      link.download = `${filename}.${fileExtension}`;
-      
+      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
       
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+      }, 100);
+      
+      // Show success notification
       showDownloadNotification();
+      
     } catch (error) {
       console.error('Error downloading file:', error);
-      
-      // Fallback method 1: Try direct download
-      try {
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        const fileExtension = getFileExtension(url);
-        link.download = `${filename}.${fileExtension}`;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showDownloadNotification();
-      } catch (fallbackError) {
-        console.error('Fallback download failed:', fallbackError);
-        
-        // Fallback method 2: Open in new tab with download intent
-        try {
-          // Create a temporary form to force download
-          const form = document.createElement('form');
-          form.method = 'GET';
-          form.action = url;
-          form.target = '_blank';
-          form.style.display = 'none';
-          document.body.appendChild(form);
-          form.submit();
-          document.body.removeChild(form);
-          
-          // Show notification after a delay
-          setTimeout(() => {
-            showDownloadNotification();
-          }, 1000);
-        } catch (finalError) {
-          console.error('All download methods failed:', finalError);
-          toast.error('Download failed. The file might be protected or the URL is invalid. Please try opening the document in a new tab.', {
-            duration: 6000,
-            position: 'top-right',
-            style: {
-              background: '#EF4444',
-              color: '#fff',
-              fontWeight: '500',
-            },
-            icon: '❌',
-          });
-        }
-      }
+      toast.error('Download failed. Please try again.', {
+        duration: 4000,
+        position: 'top-right',
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          fontWeight: '500',
+        },
+        icon: '❌',
+      });
     }
   };
 
@@ -1377,24 +1316,9 @@ export default function DriversAdminPage() {
         </CardContent>
       </Card>
 
-      {/* ALL YOUR EXISTING MODALS REMAIN EXACTLY THE SAME */}
       {/* Enhanced Document Viewer Modal */}
       {showDocuments && selectedDriver && (
-        <div 
-          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
-            margin: 0,
-            padding: 0,
-            zIndex: 9999
-          }}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Driver Details - {selectedDriver.name}</h2>
@@ -1690,21 +1614,7 @@ export default function DriversAdminPage() {
 
       {/* Small Document Viewer Modal - Updated for smaller size */}
       {showDocumentViewer && currentDocument && (
-        <div 
-          className="fixed bg-black bg-opacity-80 flex items-center justify-center z-[9999]"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
-            margin: 0,
-            padding: 0,
-            zIndex: 9999
-          }}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
           <div className="relative bg-white rounded-lg max-w-2xl max-h-[80vh] w-full mx-4 flex flex-col">
             {/* Header - Compact */}
             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-t-lg border-b">
@@ -1793,21 +1703,7 @@ export default function DriversAdminPage() {
 
       {/* Custom KYC Rejection Reason Modal */}
       {showRejectModal && (
-        <div 
-          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
-            margin: 0,
-            padding: 0,
-            zIndex: 9999
-          }}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center mb-4">
@@ -1891,21 +1787,7 @@ export default function DriversAdminPage() {
 
       {/* Confirmation Modal */}
       {showConfirmModal && (
-        <div 
-          className="fixed bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
-            margin: 0,
-            padding: 0,
-            zIndex: 9999
-          }}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all">
             <div className="p-6">
               <div className="flex items-center mb-4">
