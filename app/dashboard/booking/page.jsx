@@ -100,9 +100,6 @@ export default function BookingsPage() {
         if (sortConfig.key === 'createdAt') {
           aValue = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate() : new Date(0);
           bValue = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate() : new Date(0);
-        } else if (sortConfig.key === 'farePerKm') {
-          aValue = a.dropoff?.farePerKm || 0;
-          bValue = b.dropoff?.farePerKm || 0;
         } else {
           aValue = aValue || '';
           bValue = bValue || '';
@@ -436,15 +433,7 @@ export default function BookingsPage() {
                     </button>
                   </TableHead>
                   
-                  <TableHead className="hidden lg:table-cell">
-                    <button
-                      onClick={() => handleSort('farePerKm')}
-                      className="flex items-center space-x-1 text-left hover:text-blue-600"
-                    >
-                      <span className="text-xs sm:text-sm">Fare/Km</span>
-                      <ArrowUpDown className="w-3 h-3" />
-                    </button>
-                  </TableHead>
+                  {/* Removed Fare/Km column */}
                   
                   <TableHead>
                     <div className="flex items-center space-x-2">
@@ -528,14 +517,7 @@ export default function BookingsPage() {
                       </div>
                     </TableCell>
                     
-                    <TableCell className="p-2 sm:p-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-1 sm:gap-2">
-                        <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" />
-                        <span className="text-xs sm:text-sm font-medium">
-                          {formatCurrency(booking.dropoff?.farePerKm)}
-                        </span>
-                      </div>
-                    </TableCell>
+                    {/* Removed Fare/Km cell */}
                     
                     <TableCell className="p-2 sm:p-4">
                       <span className={`inline-block px-1 sm:px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>

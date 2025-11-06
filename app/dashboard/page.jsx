@@ -158,12 +158,12 @@ function DashboardContent() {
   const filterUsers = (searchTerm, role) => {
     let filtered = allUsers;
 
-    // Filter by search term (ID, email, name)
+    // Filter by search term (ID, email, username)
     if (searchTerm) {
       filtered = filtered.filter(user => 
         user.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (user.name && user.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (user.displayName && user.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
@@ -876,21 +876,7 @@ function DashboardContent() {
         </Card>
 
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
-              ${stats.totalRevenue.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <TrendingUp className="w-3 h-3 mr-1" />
-              From completed bookings
-            </p>
-          </CardContent>
-        </Card>
+        {/* Total Revenue card removed as requested */}
 
 
         <Card>
@@ -1156,140 +1142,6 @@ function DashboardContent() {
         </Card>
       </div>
 
-      {/* Revenue Chart */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <CardTitle>Revenue & Bookings Trends</CardTitle>
-              <CardDescription>
-                Revenue and booking trends for the selected period
-              </CardDescription>
-            </div>
-            
-            {/* Time Period Selection */}
-            <div className="flex flex-wrap gap-2">
-              {[
-                { key: 'week', label: 'This Week' },
-                { key: 'month', label: 'This Month' },
-                { key: '3months', label: '3 Months' },
-                { key: '6months', label: '6 Months' },
-                { key: 'year', label: 'This Year' }
-              ].map((period) => (
-                <button
-                  key={period.key}
-                  onClick={() => handleRevenueTimePeriodChange(period.key)}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                    revenueTimePeriod === period.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {period.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          {/* Growth Indicators */}
-          <div className="flex flex-wrap gap-4 mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Revenue Growth:</span>
-              <div className={`flex items-center gap-1 text-sm font-medium ${
-                revenueGrowthData.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {revenueGrowthData.revenueGrowth >= 0 ? 
-                  <TrendingUp className="h-3 w-3" /> : 
-                  <TrendingDown className="h-3 w-3" />
-                }
-                {Math.abs(revenueGrowthData.revenueGrowth)}%
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Bookings Growth:</span>
-              <div className={`flex items-center gap-1 text-sm font-medium ${
-                revenueGrowthData.bookingsGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {revenueGrowthData.bookingsGrowth >= 0 ? 
-                  <TrendingUp className="h-3 w-3" /> : 
-                  <TrendingDown className="h-3 w-3" />
-                }
-                {Math.abs(revenueGrowthData.bookingsGrowth)}%
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer
-            config={{
-              revenue: {
-                label: "Revenue",
-                color: "#8b5cf6",
-              },
-              bookings: {
-                label: "Bookings",
-                color: "#06b6d4",
-              },
-            }}
-            className="h-[400px]"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <XAxis 
-                  dataKey="period" 
-                  fontSize={12}
-                  angle={revenueTimePeriod === 'month' ? -45 : 0}
-                  textAnchor={revenueTimePeriod === 'month' ? 'end' : 'middle'}
-                  height={revenueTimePeriod === 'month' ? 60 : 30}
-                />
-                <YAxis fontSize={12} />
-                <ChartTooltip 
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                          <p className="font-medium text-gray-900 mb-2">{label}</p>
-                          {payload.map((entry, index) => (
-                            <div key={index} className="flex items-center gap-2 text-sm">
-                              <div 
-                                className="w-3 h-3 rounded-full" 
-                                style={{ backgroundColor: entry.color }}
-                              ></div>
-                              <span className="text-gray-600">{entry.dataKey}:</span>
-                              <span className="font-medium">
-                                {entry.dataKey === 'revenue' 
-                                  ? `$${entry.value.toLocaleString()}` 
-                                  : entry.value
-                                }
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#8b5cf6"
-                  fill="#8b5cf6"
-                  fillOpacity={0.3}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="bookings"
-                  stroke="#06b6d4"
-                  strokeWidth={3}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-
       {/* Users Table */}
       <Card>
         <CardHeader>
@@ -1351,7 +1203,7 @@ function DashboardContent() {
                 <TableRow>
                   <TableHead>User ID</TableHead>
                   <TableHead>Email</TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created At</TableHead>
@@ -1366,7 +1218,7 @@ function DashboardContent() {
                       </TableCell>
                       <TableCell>{user.email || 'N/A'}</TableCell>
                       <TableCell>
-                        {user.name || user.displayName || 'N/A'}
+                        {user.username || user.displayName || user.name || 'N/A'}
                       </TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
