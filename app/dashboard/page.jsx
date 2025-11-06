@@ -1403,7 +1403,7 @@ function DashboardContent() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No users found matching your criteria
+                      No users found matching your filters
                     </TableCell>
                   </TableRow>
                 )}

@@ -79,11 +79,11 @@ export default function RidersPage() {
       );
     }
 
-    // Date filter (simple text match for now)
+    // Date filter (simple text match against dd/mm/yy)
     if (tableFilters.updatedAt) {
       filtered = filtered.filter(rider => {
-        if (rider.updatedAt && rider.updatedAt.toDate) {
-          const dateStr = rider.updatedAt.toDate().toLocaleDateString();
+        if (rider.updatedAt) {
+          const dateStr = formatDate(rider.updatedAt);
           return dateStr.toLowerCase().includes(tableFilters.updatedAt.toLowerCase());
         }
         return false;
@@ -198,13 +198,15 @@ export default function RidersPage() {
     return phoneNumber.replace(/(\+\d{2})(\d{10})/, '$1 $2');
   };
 
-  // Format date for display
+  // Format date for display (dd/mm/yy)
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
-    if (timestamp.toDate) {
-      return timestamp.toDate().toLocaleString();
-    }
-    return new Date(timestamp).toLocaleString();
+    const dateObj = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(dateObj.getTime())) return 'N/A';
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yy = String(dateObj.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
   };
 
   // Actions Dropdown
@@ -511,14 +513,6 @@ export default function RidersPage() {
               <p className="text-gray-500 mb-2">
                 {riders.length === 0 ? 'No riders found in the database' : 'No riders found matching your filters'}
               </p>
-              {(tableFilters.phoneNumber || tableFilters.role || tableFilters.username || tableFilters.updatedAt) && (
-                <button
-                  onClick={clearAllFilters}
-                  className="text-blue-600 hover:text-blue-800 text-sm"
-                >
-                  Clear all filters
-                </button>
-              )}
             </div>
           )}
         </CardContent>

@@ -550,7 +550,7 @@ const FeedbackPage = () => {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search feedback, users, drivers..."
+                placeholder="Search feedback bookings ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -609,7 +609,7 @@ const FeedbackPage = () => {
           {filteredFeedbacks.length === 0 ? (
             <div className="text-center py-8">
               <MessageCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-500">No feedback found matching your criteria</p>
+              <p className="text-gray-500">No feedback found matching your filters</p>
             </div>
           ) : (
             <>

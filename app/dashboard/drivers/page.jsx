@@ -172,7 +172,9 @@ export default function DriversAdminPage() {
     // Apply table filters
     if (tableFilters.name) {
       filtered = filtered.filter(driver =>
-        driver.name?.toLowerCase().includes(tableFilters.name.toLowerCase()) ||
+        (driver.username || driver.name || '')
+          .toLowerCase()
+          .includes(tableFilters.name.toLowerCase()) ||
         driver.email?.toLowerCase().includes(tableFilters.name.toLowerCase())
       );
     }
@@ -194,7 +196,7 @@ export default function DriversAdminPage() {
 
     if (tableFilters.vehicleStatus) {
       filtered = filtered.filter(driver => {
-        const isActive = driver.vehicleActive !== false;
+        const isActive = driver.vehicleActive === true;
         const status = isActive ? 'active' : 'inactive';
         return status === tableFilters.vehicleStatus;
       });
@@ -215,8 +217,8 @@ export default function DriversAdminPage() {
         let bValue = b[sortConfig.key];
 
         if (sortConfig.key === 'name') {
-          aValue = a.name || '';
-          bValue = b.name || '';
+          aValue = a.username || a.name || '';
+          bValue = b.username || b.name || '';
         }
 
         if (aValue < bValue) {
@@ -239,7 +241,9 @@ export default function DriversAdminPage() {
     // Search filter
     if (filters.searchTerm) {
       filtered = filtered.filter(driver =>
-        driver.name?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        (driver.username || driver.name || '')
+          .toLowerCase()
+          .includes(filters.searchTerm.toLowerCase()) ||
         driver.email?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
         driver.phone?.includes(filters.searchTerm)
       );
@@ -265,7 +269,7 @@ export default function DriversAdminPage() {
     // Vehicle filter - Updated for active/inactive
     if (filters.vehicleFilter !== 'all') {
       filtered = filtered.filter(driver => {
-        const isActive = driver.vehicleActive !== false;
+    const isActive = driver.vehicleActive === true;
         const status = isActive ? 'active' : 'inactive';
         return status === filters.vehicleFilter;
       });
@@ -724,6 +728,17 @@ export default function DriversAdminPage() {
     }
   };
 
+  // Format date for display (dd/mm/yy)
+  const formatDateDdMmYy = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    const dateObj = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(dateObj.getTime())) return 'N/A';
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yy = String(dateObj.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  };
+
   // Enhanced Status Badge with Boolean Support
   const getStatusBadge = (kycApproved, kycStatus, documentCount = 0) => {
     const displayStatus = getKYCDisplayStatus(kycApproved, kycStatus, documentCount);
@@ -931,7 +946,7 @@ export default function DriversAdminPage() {
                   <>
                     <button
                       onClick={() => {
-                        updateVehicleStatus(driver.id, !(driver.vehicleActive !== false));
+      updateVehicleStatus(driver.id, !(driver.vehicleActive === true));
                         setIsOpen(false);
                       }}
                       className={`flex items-center w-full px-4 py-2 text-sm transition-colors ${
@@ -940,7 +955,7 @@ export default function DriversAdminPage() {
                           : 'text-green-700 hover:bg-green-50'
                       }`}
                     >
-                      {driver.vehicleActive !== false ? (
+      {driver.vehicleActive === true ? (
                         <>
                           <XCircle className="w-4 h-4 mr-3" />
                           Deactivate Vehicle
@@ -1192,7 +1207,7 @@ export default function DriversAdminPage() {
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
                       <div className="text-gray-500">
-                        <p className="text-lg font-medium">No Drivers found matching your filters</p>
+                        <p className="text-sm font-medium">No Drivers found matching your filters</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1204,7 +1219,7 @@ export default function DriversAdminPage() {
                           {driver.photoUrl ? (
                             <img
                               src={driver.photoUrl}
-                              alt={driver.name}
+                              alt={driver.username || driver.name || 'Driver'}
                               className="h-10 w-10 rounded-full object-cover"
                             />
                           ) : (
@@ -1214,7 +1229,7 @@ export default function DriversAdminPage() {
                           )}
                           <div className="space-y-1">
                             <p className="text-sm font-medium leading-none">
-                              {driver.name || 'Unnamed Driver'}
+                              {driver.username || driver.name || 'Unnamed Driver'}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {driver.email}
@@ -1243,7 +1258,7 @@ export default function DriversAdminPage() {
                                   {driver.vehicle.number}
                                 </p>
                               </div>
-                              {getVehicleStatusBadge(driver.vehicleActive !== false)}
+      {getVehicleStatusBadge(driver.vehicleActive === true)}
                             </>
                           ) : (
                             <div className="flex items-center gap-2 text-muted-foreground">
@@ -1267,7 +1282,7 @@ export default function DriversAdminPage() {
                       <TableCell>
                         <div className="space-y-2">
                           {driver.vehicle ? (
-                            getVehicleStatusBadge(driver.vehicleActive !== false)
+      getVehicleStatusBadge(driver.vehicleActive === true)
                           ) : (
                             <span className="text-xs text-gray-500">No vehicle</span>
                           )}
@@ -1276,9 +1291,9 @@ export default function DriversAdminPage() {
                       
                       <TableCell>
                         <p className="text-sm">
-                          {driver.createdAt && driver.createdAt.toDate
-                            ? driver.createdAt.toDate().toLocaleDateString()
-                            : driver.addedAt || '—'}
+                          {driver.createdAt
+                            ? formatDateDdMmYy(driver.createdAt)
+                            : driver.addedAt ? formatDateDdMmYy(driver.addedAt) : '—'}
                         </p>
                       </TableCell>
                       
@@ -1321,7 +1336,7 @@ export default function DriversAdminPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Driver Details - {selectedDriver.name}</h2>
+              <h2 className="text-2xl font-bold">Driver Details - {selectedDriver.username || selectedDriver.name}</h2>
               <button
                 onClick={() => setShowDocuments(false)}
                 className="text-gray-500 hover:text-gray-700 text-2xl"
@@ -1344,7 +1359,7 @@ export default function DriversAdminPage() {
                     {selectedDriver.photoUrl ? (
                       <img
                         src={selectedDriver.photoUrl}
-                        alt={selectedDriver.name}
+                        alt={selectedDriver.username || selectedDriver.name || 'Driver'}
                         className="w-24 h-24 rounded-full object-cover border"
                       />
                     ) : (
@@ -1353,7 +1368,7 @@ export default function DriversAdminPage() {
                       </div>
                     )}
                   </div>
-                  <div><strong>Name:</strong> {selectedDriver.name || 'Not provided'}</div>
+                  <div><strong>Name:</strong> {selectedDriver.username || selectedDriver.name || 'Not provided'}</div>
                   <div><strong>Email:</strong> {selectedDriver.email || 'Not provided'}</div>
                   <div><strong>Phone:</strong> {selectedDriver.phone || 'Not provided'}</div>
                   <div><strong>UID:</strong> {selectedDriver.uid || 'Not provided'}</div>
@@ -1396,11 +1411,11 @@ export default function DriversAdminPage() {
                             src={selectedDriver.vehicle.photoUrl}
                             alt="Vehicle"
                             className="w-24 h-16 object-cover border rounded cursor-pointer hover:opacity-80"
-                            onClick={() => openDocumentViewer(
-                              selectedDriver.vehicle.photoUrl, 
-                              `${selectedDriver.name}_vehicle_photo`, 
-                              'vehicle'
-                            )}
+                              onClick={() => openDocumentViewer(
+                                selectedDriver.vehicle.photoUrl, 
+                                `${selectedDriver.username || selectedDriver.name}_vehicle_photo`, 
+                                'vehicle'
+                              )}
                           />
                         </div>
                       )}
@@ -1413,7 +1428,7 @@ export default function DriversAdminPage() {
                       <div>
                         <strong>Vehicle Status:</strong>
                         <span className="ml-2">
-                          {getVehicleStatusBadge(selectedDriver.vehicleActive !== false)}
+      {getVehicleStatusBadge(selectedDriver.vehicleActive === true)}
                         </span>
                       </div>
 
@@ -1424,7 +1439,7 @@ export default function DriversAdminPage() {
                             <button
                               onClick={() => openDocumentViewer(
                                 selectedDriver.vehicle.documentUrl, 
-                                `${selectedDriver.name}_vehicle_document`, 
+                                `${selectedDriver.username || selectedDriver.name}_vehicle_document`, 
                                 'vehicle'
                               )}
                               className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
@@ -1438,7 +1453,7 @@ export default function DriversAdminPage() {
                                 e.stopPropagation();
                                 downloadDocument(
                                   selectedDriver.vehicle.documentUrl,
-                                  `${selectedDriver.name}_Vehicle_Document`
+                                  `${selectedDriver.username || selectedDriver.name}_Vehicle_Document`
                                 );
                               }}
                               className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1"
@@ -1489,11 +1504,11 @@ export default function DriversAdminPage() {
                             {docData.url ? (
                               <>
                                 <button
-                                  onClick={() => openDocumentViewer(
-                                    docData.url, 
-                                    `${selectedDriver.name}_${docType}`, 
-                                    'kyc'
-                                  )}
+                                    onClick={() => openDocumentViewer(
+                                      docData.url, 
+                                      `${selectedDriver.username || selectedDriver.name}_${docType}`, 
+                                      'kyc'
+                                    )}
                                   className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1 transition-colors"
                                 >
                                   <Eye className="w-3 h-3" />
@@ -1505,7 +1520,7 @@ export default function DriversAdminPage() {
                                     e.stopPropagation();
                                     downloadDocument(
                                       docData.url,
-                                      `${selectedDriver.name}_${docType}_KYC`
+                                      `${selectedDriver.username || selectedDriver.name}_${docType}_KYC`
                                     );
                                   }}
                                   className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1 transition-colors"
@@ -1577,7 +1592,7 @@ export default function DriversAdminPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      updateVehicleStatus(selectedDriver.id, !(selectedDriver.vehicleActive !== false));
+      updateVehicleStatus(selectedDriver.id, !(selectedDriver.vehicleActive === true));
                       setShowDocuments(false);
                     }}
                     className={`px-6 py-2 rounded-lg flex items-center gap-2 transition-colors ${
@@ -1586,7 +1601,7 @@ export default function DriversAdminPage() {
                         : 'bg-green-500 text-white hover:bg-green-600'
                     }`}
                   >
-                    {selectedDriver.vehicleActive !== false ? (
+      {selectedDriver.vehicleActive === true ? (
                       <>
                         <XCircle className="w-4 h-4" />
                         Deactivate Vehicle

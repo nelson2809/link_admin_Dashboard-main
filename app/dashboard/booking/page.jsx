@@ -172,13 +172,15 @@ export default function BookingsPage() {
     setLoading(false);
   };
 
-  // Format date for display
+  // Format date for display (dd/mm/yy)
   const formatDate = (timestamp) => {
     if (!timestamp) return 'N/A';
-    if (timestamp.toDate) {
-      return timestamp.toDate().toLocaleString();
-    }
-    return new Date(timestamp).toLocaleString();
+    const dateObj = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(dateObj.getTime())) return 'N/A';
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yy = String(dateObj.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
   };
 
   // Format currency
@@ -568,14 +570,6 @@ export default function BookingsPage() {
               <p className="text-gray-500 mb-2 text-sm sm:text-base">
                 {bookings.length === 0 ? 'No bookings found in the database' : 'No bookings found matching your filters'}
               </p>
-              {(tableFilters.driverId || tableFilters.riderId || tableFilters.status || tableFilters.pickupLabel || tableFilters.dropoffLabel) && (
-                <button
-                  onClick={clearAllFilters}
-                  className="text-blue-600 hover:text-blue-800 text-sm"
-                >
-                  Clear all filters
-                </button>
-              )}
             </div>
           )}
         </CardContent>
