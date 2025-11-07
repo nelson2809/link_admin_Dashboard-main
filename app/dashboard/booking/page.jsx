@@ -189,11 +189,7 @@ export default function BookingsPage() {
   // Get status badge color
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'requested':
-        return 'bg-yellow-100 text-yellow-800';
       case 'accepted':
-        return 'bg-blue-100 text-blue-800';
-      case 'in-progress':
         return 'bg-purple-100 text-purple-800';
       case 'completed':
         return 'bg-green-100 text-green-800';
@@ -268,14 +264,6 @@ export default function BookingsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">Bookings Management</h1>
           <p className="text-gray-600 mt-1">Manage all ride bookings in the system</p>
         </div>
-        <button
-          onClick={fetchBookings}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors w-full sm:w-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Data
-        </button>
       </div>
 
       {/* Summary Stats - Responsive Grid */}
@@ -446,9 +434,7 @@ export default function BookingsPage() {
                         className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                       >
                         <option value="">All Status</option>
-                        <option value="requested">Requested</option>
                         <option value="accepted">Accepted</option>
-                        <option value="in-progress">In Progress</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
                       </select>

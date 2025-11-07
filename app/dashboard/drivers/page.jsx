@@ -1084,15 +1084,16 @@ export default function DriversAdminPage() {
                 Complete list of registered drivers with their verification status
               </CardDescription>
             </div>
-            {/* ADDED: Clear All Filters Button */}
-            <Button
-              onClick={clearAllFilters}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <FilterX className="w-4 h-4" />
-              Clear All Filters
-            </Button>
+            {/* Show Clear Filters only when any table filter is active, styled like Bookings page */}
+            {(tableFilters.name || tableFilters.vehicle || tableFilters.kycStatus || tableFilters.vehicleStatus || tableFilters.status) && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 self-start sm:self-center"
+              >
+                <Filter className="w-4 h-4" />
+                Clear Filters
+              </button>
+            )}
           </div>
         </CardHeader>
         <CardContent>

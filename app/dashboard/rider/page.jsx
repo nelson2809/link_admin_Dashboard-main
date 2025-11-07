@@ -266,12 +266,6 @@ export default function RidersPage() {
           <h1 className="text-3xl font-bold">Riders Management</h1>
           <p className="text-gray-600 mt-1">Manage all registered riders in the system</p>
         </div>
-        <button
-          onClick={fetchRiders}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Refresh Data
-        </button>
       </div>
 
       {/* Summary Stats */}

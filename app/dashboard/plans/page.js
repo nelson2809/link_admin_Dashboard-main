@@ -625,7 +625,6 @@ const SubscriptionPage = () => {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
-                <SelectItem value="dummy">Test/Dummy</SelectItem>
               </SelectContent>
             </Select>
 
@@ -763,15 +762,7 @@ const SubscriptionPage = () => {
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteClick(subscription)}
-                              className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                              title="Delete subscription"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            
                           </div>
                         </TableCell>
                       </TableRow>
