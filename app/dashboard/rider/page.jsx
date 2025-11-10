@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
 import {
@@ -30,11 +30,23 @@ export default function RidersPage() {
   const [selectedRider, setSelectedRider] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   
+  // Build display code map for riders in current dataset
+  const riderCodeMap = useMemo(() => {
+    const ids = Array.from(new Set(riders.map(r => r.id).filter(Boolean)));
+    ids.sort();
+    const map = {};
+    ids.forEach((id, idx) => {
+      map[id] = `RIDER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [riders]);
+  
   // Table filtering states
   const [tableFilters, setTableFilters] = useState({
     phoneNumber: '',
     role: '',
     username: '',
+    code: '',
     updatedAt: ''
   });
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -79,6 +91,13 @@ export default function RidersPage() {
       );
     }
 
+    // Rider code filter
+    if (tableFilters.code) {
+      filtered = filtered.filter(rider =>
+        (riderCodeMap[rider.id] || '').toLowerCase().includes(tableFilters.code.toLowerCase())
+      );
+    }
+
     // Date filter (simple text match against dd/mm/yy)
     if (tableFilters.updatedAt) {
       filtered = filtered.filter(rider => {
@@ -96,7 +115,10 @@ export default function RidersPage() {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
 
-        if (sortConfig.key === 'updatedAt') {
+        if (sortConfig.key === 'code') {
+          aValue = riderCodeMap[a.id] || '';
+          bValue = riderCodeMap[b.id] || '';
+        } else if (sortConfig.key === 'updatedAt') {
           aValue = a.updatedAt && a.updatedAt.toDate ? a.updatedAt.toDate() : new Date(0);
           bValue = b.updatedAt && b.updatedAt.toDate ? b.updatedAt.toDate() : new Date(0);
         } else {
@@ -370,6 +392,30 @@ export default function RidersPage() {
                       </div>
                     </div>
                   </TableHead>
+
+                  <TableHead className="w-[160px]">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleSort('code')}
+                        className="flex items-center space-x-1 text-left hover:text-blue-600"
+                      >
+                        <span>Rider Code</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search code..."
+                          value={tableFilters.code}
+                          onChange={(e) => handleTableFilterChange('code', e.target.value)}
+                          className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </TableHead>
                   
                   <TableHead>
                     <div className="flex items-center space-x-2">
@@ -449,11 +495,12 @@ export default function RidersPage() {
                           <p className="text-sm font-medium leading-none">
                             {rider.username || 'Unknown User'}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            ID: {rider.id.substring(0, 8)}...
-                          </p>
                         </div>
                       </div>
+                    </TableCell>
+
+                    <TableCell className="font-mono text-xs">
+                      {riderCodeMap[rider.id] || 'N/A'}
                     </TableCell>
                     
                     <TableCell>
@@ -563,8 +610,8 @@ export default function RidersPage() {
                   <p className="text-lg">{formatDate(selectedRider.updatedAt)}</p>
                 </div>
                 <div className="col-span-2">
-                  <label className="text-sm font-medium text-gray-700">User ID</label>
-                  <p className="text-sm font-mono bg-gray-100 p-2 rounded break-all">{selectedRider.id}</p>
+                  <label className="text-sm font-medium text-gray-700">Rider Code</label>
+                  <p className="text-sm font-mono bg-gray-100 p-2 rounded break-all">{selectedRider?.id ? riderCodeMap[selectedRider.id] : 'N/A'}</p>
                 </div>
               </div>
             </div>

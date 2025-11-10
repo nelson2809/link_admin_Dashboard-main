@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
 import { db } from "../lib/firebase/config";
 import AuthGuard from '../components/AuthGuard';
@@ -27,6 +28,8 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   Bar,
   BarChart,
@@ -67,6 +70,7 @@ function DashboardContent() {
   const [stats, setStats] = useState({
     totalClients: 0,
     totalDrivers: 0,
+    totalRiders: 0,
     activeDrivers: 0,
     totalRevenue: 0,
     activeBookings: 0,
@@ -84,6 +88,8 @@ function DashboardContent() {
   const [revenueData, setRevenueData] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bookingDetailsOpen, setBookingDetailsOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
   
   // New state for user table and filtering
   const [allUsers, setAllUsers] = useState([]);
@@ -113,6 +119,44 @@ function DashboardContent() {
   const [bookingFilter, setBookingFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Helpers for booking details view
+  const formatDateTime = (ts) => {
+    if (!ts) return 'N/A';
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    if (Number.isNaN(d.getTime())) return 'N/A';
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
+  const openBookingDetails = (booking) => {
+    setSelectedBooking(booking);
+    setBookingDetailsOpen(true);
+  };
+  const closeBookingDetails = () => {
+    setBookingDetailsOpen(false);
+    setSelectedBooking(null);
+  };
+
+  // Build display code map for users (DRIVER###, RIDER###, USER###)
+  const userCodeMap = useMemo(() => {
+    // Ensure rider codes are generated only from users with role === 'rider'
+    const isRiderRole = (role) => role === 'rider';
+
+    const uniqSorted = (arr) => Array.from(new Set(arr.filter(Boolean))).sort();
+
+    const driverIds = uniqSorted(allUsers.filter(u => u.role === 'driver').map(u => u.id));
+    const riderIds = uniqSorted(allUsers.filter(u => isRiderRole(u.role)).map(u => u.id));
+    const otherIds = uniqSorted(
+      allUsers
+        .filter(u => (u.role && u.role !== 'driver' && !isRiderRole(u.role)))
+        .map(u => u.id)
+    );
+
+    const map = {};
+    driverIds.forEach((id, idx) => { map[id] = `DRIVER${String(idx + 1).padStart(3, '0')}`; });
+    riderIds.forEach((id, idx) => { map[id] = `RIDER${String(idx + 1).padStart(3, '0')}`; });
+    otherIds.forEach((id, idx) => { map[id] = `USER${String(idx + 1).padStart(3, '0')}`; });
+    return map;
+  }, [allUsers]);
+
 
   // Get user from localStorage once component mounts
   useEffect(() => {
@@ -140,17 +184,22 @@ function DashboardContent() {
 
 
   // Helper function to determine KYC display status
+  // Aligned with Drivers page logic to ensure consistent counts
   const getKYCDisplayStatus = (kycApproved, kycStatus, documentCount) => {
-    if (typeof kycApproved === "boolean") {
-      if (kycApproved) return "verified";
-      // If explicitly rejected (false) and has kycStatus as rejected, show rejected
-      if (kycStatus === "rejected") return "rejected";
-      return "pending";
+    // Explicitly handle zero-document case: show Not Submitted; never Pending
+    if (documentCount === 0) {
+      if (kycStatus === 'rejected' || kycApproved === false) return 'rejected';
+      return 'not-submitted';
     }
-    if (documentCount > 0 && (!kycStatus || kycStatus === "not-submitted")) {
-      return "submitted";
+    if (typeof kycApproved === 'boolean') {
+      if (kycApproved) return 'verified';
+      if (kycStatus === 'rejected') return 'rejected';
+      return 'pending';
     }
-    return kycStatus || "not-submitted";
+    if (documentCount > 0 && (!kycStatus || kycStatus === 'not-submitted')) {
+      return 'submitted';
+    }
+    return kycStatus || 'not-submitted';
   };
 
 
@@ -160,19 +209,24 @@ function DashboardContent() {
 
     // Filter by search term (ID, email, username)
     if (searchTerm) {
-      filtered = filtered.filter(user => 
-        user.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (user.displayName && user.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(user => {
+        const code = (userCodeMap[user.id] || '').toLowerCase();
+        return (
+          user.id.toLowerCase().includes(term) ||
+          code.includes(term) ||
+          (user.email && user.email.toLowerCase().includes(term)) ||
+          (user.username && user.username.toLowerCase().includes(term)) ||
+          (user.displayName && user.displayName.toLowerCase().includes(term))
+        );
+      });
     }
 
     // Filter by role
     if (role !== 'all') {
       filtered = filtered.filter(user => {
         if (role === 'rider') {
-          return user.role === 'client' || user.role === 'customer' || user.role === 'rider' || !user.role;
+          return user.role === 'rider';
         }
         return user.role === role;
       });
@@ -441,16 +495,20 @@ function DashboardContent() {
     try {
       setLoading(true);
       
-      // Fetch all users from the 'users' collection
-      const usersQuery = query(
-        collection(db, "users"),
-        orderBy("createdAt", "desc")
-      );
-      const usersSnapshot = await getDocs(usersQuery);
-      const usersData = usersSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      // Fetch all users from the 'users' collection (no server-side orderBy)
+      // Some documents may be missing 'createdAt'; fetch all then sort client-side
+      const usersSnapshot = await getDocs(collection(db, "users"));
+      const usersData = usersSnapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const toDate = (v) => {
+            const d = v?.toDate ? v.toDate() : new Date(v);
+            return isNaN(d) ? new Date(0) : d;
+          };
+          const aDate = toDate(a.createdAt);
+          const bDate = toDate(b.createdAt);
+          return bDate - aDate; // desc
+        });
 
       // Store all users for the table
       setAllUsers(usersData);
@@ -462,6 +520,8 @@ function DashboardContent() {
         (user) =>
           user.role === "client" || user.role === "customer" || user.role === "rider" || !user.role
       );
+      // Riders dataset for dedicated riders count
+      const ridersData = usersData.filter((user) => user.role === "rider");
 
 
       // Fetch bookings data
@@ -587,6 +647,7 @@ function DashboardContent() {
       setStats({
         totalClients: clientsData.length,
         totalDrivers,
+        totalRiders: ridersData.length,
         activeDrivers,
         totalRevenue: bookingsStats.totalRevenue,
         activeBookings: bookingsStats.activeBookings,
@@ -843,8 +904,9 @@ function DashboardContent() {
 
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-         <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 auto-rows-fr">
+         <Link href="/dashboard/drivers" className="block">
+         <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">KYC Verified</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-500" />
@@ -856,9 +918,10 @@ function DashboardContent() {
             <p className="text-xs text-muted-foreground">Approved drivers</p>
           </CardContent>
         </Card>
+        </Link>
 
-
-        <Card>
+        <Link href="/dashboard/drivers" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Drivers</CardTitle>
             <Car className="h-4 w-4 text-muted-foreground" />
@@ -874,12 +937,9 @@ function DashboardContent() {
             </p>
           </CardContent>
         </Card>
-
-
-        {/* Total Revenue card removed as requested */}
-
-
-        <Card>
+        </Link>
+        <Link href="/dashboard/booking" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Active Bookings
@@ -896,15 +956,29 @@ function DashboardContent() {
             </p>
           </CardContent>
         </Card>
+        </Link>
+
+        <Link href="/dashboard/rider" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Riders</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {stats.totalRiders}
+            </div>
+            <p className="text-xs text-muted-foreground">Registered riders</p>
+          </CardContent>
+        </Card>
+        </Link>
       </div>
 
 
       {/* Driver Management Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-       
-
-
-        <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 auto-rows-fr">
+        <Link href="/dashboard/drivers" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">KYC Pending</CardTitle>
             <Clock className="h-4 w-4 text-yellow-500" />
@@ -916,9 +990,10 @@ function DashboardContent() {
             <p className="text-xs text-muted-foreground">Awaiting review</p>
           </CardContent>
         </Card>
+        </Link>
 
-
-        <Card>
+        <Link href="/dashboard/drivers" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">KYC Rejected</CardTitle>
             <XCircle className="h-4 w-4 text-red-500" />
@@ -930,9 +1005,10 @@ function DashboardContent() {
             <p className="text-xs text-muted-foreground">Need resubmission</p>
           </CardContent>
         </Card>
+        </Link>
 
-
-        <Card>
+        <Link href="/dashboard/drivers" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Active Vehicles
@@ -946,9 +1022,10 @@ function DashboardContent() {
             <p className="text-xs text-muted-foreground">Vehicles in service</p>
           </CardContent>
         </Card>
+        </Link>
 
-
-        <Card>
+        <Link href="/dashboard/drivers" className="block">
+        <Card className="h-full cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Inactive Vehicles
@@ -962,6 +1039,7 @@ function DashboardContent() {
             <p className="text-xs text-muted-foreground">Vehicles offline</p>
           </CardContent>
         </Card>
+        </Link>
       </div>
 
       {/* Charts Section - Changed to Single Column */}
@@ -1174,7 +1252,7 @@ function DashboardContent() {
                 className="flex items-center space-x-1"
               >
                 <User className="h-3 w-3" />
-                <span>Rider Details ({allUsers.filter(u => u.role === 'client' || u.role === 'customer' || u.role === 'rider' || !u.role).length})</span>
+                <span>Rider Details ({allUsers.filter(u => u.role === 'rider').length})</span>
               </Button>
             </div>
           </div>
@@ -1185,7 +1263,7 @@ function DashboardContent() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by User ID, email, or name..."
+                placeholder="Search by Code, email, or name..."
                 value={userFilter}
                 onChange={handleSearchChange}
                 className="pl-8"
@@ -1201,7 +1279,7 @@ function DashboardContent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User ID</TableHead>
+                  <TableHead>User Code</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
@@ -1214,21 +1292,23 @@ function DashboardContent() {
                   filteredUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-mono text-xs">
-                        {user.id}
+                        {userCodeMap[user.id] || user.id}
                       </TableCell>
                       <TableCell>{user.email || 'N/A'}</TableCell>
                       <TableCell>
                         {user.username || user.displayName || user.name || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          user.role === 'driver' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : user.role === 'client' || user.role === 'customer' || user.role === 'rider' || !user.role
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {user.role === 'client' || user.role === 'customer' || !user.role ? 'rider' : user.role}
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            user.role === 'driver'
+                              ? 'bg-blue-100 text-blue-800'
+                              : user.role === 'rider'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {user.role || 'N/A'}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -1310,6 +1390,15 @@ function DashboardContent() {
                           : booking.createdAt
                       ).toLocaleDateString()}
                   </div>
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openBookingDetails(booking)}
+                    >
+                      View Details
+                    </Button>
+                  </div>
                 </div>
               ))
             ) : (
@@ -1357,6 +1446,80 @@ function DashboardContent() {
               </>
             )}
           </div>
+          {/* Booking Details Sheet */}
+          <Sheet
+            open={bookingDetailsOpen}
+            onOpenChange={(open) => {
+              if (!open) {
+                closeBookingDetails();
+              } else {
+                setBookingDetailsOpen(true);
+              }
+            }}
+          >
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>Booking Details</SheetTitle>
+                <SheetDescription>Full booking information</SheetDescription>
+              </SheetHeader>
+              <div className="space-y-3 mt-4">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Booking ID</span>
+                  <span className="font-mono text-sm">{selectedBooking?.id || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    selectedBooking?.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    (selectedBooking?.status === 'active' || selectedBooking?.status === 'in-progress') ? 'bg-blue-100 text-blue-800' :
+                    selectedBooking?.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {selectedBooking?.status || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Created At</span>
+                  <span className="text-sm">{formatDateTime(selectedBooking?.createdAt)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Client</span>
+                  <span className="font-mono text-sm">{selectedBooking?.clientId || selectedBooking?.client || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Driver</span>
+                  <span className="font-mono text-sm">{userCodeMap[selectedBooking?.driverId] || userCodeMap[selectedBooking?.driver] || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Pickup</span>
+                  <span className="text-sm">{selectedBooking?.pickupLocation || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Dropoff</span>
+                  <span className="text-sm">{selectedBooking?.dropoffLocation || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Fare</span>
+                  <span className="text-sm">{selectedBooking?.fare != null ? `$${selectedBooking.fare}` : 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Distance</span>
+                  <span className="text-sm">{selectedBooking?.distance || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Duration</span>
+                  <span className="text-sm">{selectedBooking?.duration || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Payment Method</span>
+                  <span className="text-sm">{selectedBooking?.paymentMethod || 'N/A'}</span>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <Button variant="secondary" onClick={closeBookingDetails}>Close</Button>
+              </div>
+            </SheetContent>
+          </Sheet>
         </CardContent>
       </Card>
     </div>

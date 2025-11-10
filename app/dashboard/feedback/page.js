@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, orderBy, where, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
 import {
@@ -168,7 +168,7 @@ const ConfirmationModal = ({
 };
 
 // Review Detail Modal Component
-const ReviewDetailModal = ({ isOpen, onClose, feedback }) => {
+const ReviewDetailModal = ({ isOpen, onClose, feedback, riderCode, driverCode }) => {
   if (!isOpen || !feedback) return null;
 
   return (
@@ -229,6 +229,21 @@ const ReviewDetailModal = ({ isOpen, onClose, feedback }) => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Driver ID</label>
               <code className="bg-gray-100 px-3 py-2 rounded text-sm block break-all">
                 {feedback.driverId || 'N/A'}
+              </code>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rider Code ID</label>
+              <code className="bg-gray-100 px-3 py-2 rounded text-sm block break-all">
+                {riderCode || 'N/A'}
+              </code>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Driver Code ID</label>
+              <code className="bg-gray-100 px-3 py-2 rounded text-sm block break-all">
+                {driverCode || 'N/A'}
               </code>
             </div>
           </div>
@@ -299,6 +314,27 @@ const FeedbackPage = () => {
     }
   });
 
+  // Build display code maps for drivers and riders across feedback dataset
+  const driverCodeMap = useMemo(() => {
+    const ids = Array.from(new Set(feedbacks.map(f => f.driverId).filter(Boolean)));
+    ids.sort();
+    const map = {};
+    ids.forEach((id, idx) => {
+      map[id] = `DRIVER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [feedbacks]);
+
+  const riderCodeMap = useMemo(() => {
+    const ids = Array.from(new Set(feedbacks.map(f => f.userId).filter(Boolean)));
+    ids.sort();
+    const map = {};
+    ids.forEach((id, idx) => {
+      map[id] = `RIDER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [feedbacks]);
+
   // Pagination hook with same configuration as other pages
   const pagination = usePagination(filteredFeedbacks, {
     initialItemsPerPage: 10,
@@ -362,12 +398,19 @@ const FeedbackPage = () => {
     let filtered = [...feedbacks];
 
     if (searchTerm) {
-      filtered = filtered.filter(feedback =>
-        feedback.review?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        feedback.userId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        feedback.driverId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        feedback.bookingId?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(feedback => {
+        const riderCode = riderCodeMap[feedback.userId] || '';
+        const driverCode = driverCodeMap[feedback.driverId] || '';
+        return (
+          feedback.review?.toLowerCase().includes(term) ||
+          feedback.userId?.toLowerCase().includes(term) ||
+          feedback.driverId?.toLowerCase().includes(term) ||
+          riderCode.toLowerCase().includes(term) ||
+          driverCode.toLowerCase().includes(term) ||
+          feedback.bookingId?.toLowerCase().includes(term)
+        );
+      });
     }
 
     if (ratingFilter !== 'all') {
@@ -619,7 +662,7 @@ const FeedbackPage = () => {
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Booking ID</TableHead>
-                      <TableHead>User</TableHead>
+                      <TableHead>Rider</TableHead>
                       <TableHead>Driver</TableHead>
                       <TableHead>Rating</TableHead>
                       <TableHead>Review</TableHead>
@@ -645,8 +688,10 @@ const FeedbackPage = () => {
                         <TableCell>
                           <div className="flex items-center text-sm">
                             <User className="w-4 h-4 mr-2 text-gray-400" />
-                            <span className="truncate max-w-[100px] font-mono text-xs" title={feedback.userId}>
-                              {feedback.userId?.substring(0, 8) || 'N/A'}...
+                            <span className="truncate max-w-[120px] font-mono text-xs" title={feedback.userId}>
+                              {feedback.userId 
+                                ? (riderCodeMap[feedback.userId] || 'N/A')
+                                : 'N/A'}
                             </span>
                           </div>
                         </TableCell>
@@ -654,8 +699,10 @@ const FeedbackPage = () => {
                         <TableCell>
                           <div className="flex items-center text-sm">
                             <Car className="w-4 h-4 mr-2 text-gray-400" />
-                            <span className="truncate max-w-[100px] font-mono text-xs" title={feedback.driverId}>
-                              {feedback.driverId?.substring(0, 8) || 'N/A'}...
+                            <span className="truncate max-w-[120px] font-mono text-xs" title={feedback.driverId}>
+                              {feedback.driverId 
+                                ? (driverCodeMap[feedback.driverId] || 'N/A')
+                                : 'N/A'}
                             </span>
                           </div>
                         </TableCell>
@@ -742,6 +789,8 @@ Review: "${confirmModal.feedbackDetails.review || 'No review'}"` : ''}`}
         isOpen={reviewModal.isOpen}
         onClose={handleReviewModalClose}
         feedback={reviewModal.feedback}
+        riderCode={reviewModal.feedback ? riderCodeMap[reviewModal.feedback.userId] : undefined}
+        driverCode={reviewModal.feedback ? driverCodeMap[reviewModal.feedback.driverId] : undefined}
       />
     </div>
   );

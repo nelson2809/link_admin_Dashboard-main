@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, doc, updateDoc, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
 import toast, { Toaster } from 'react-hot-toast';
@@ -50,6 +50,17 @@ export default function DriversAdminPage() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [showDocuments, setShowDocuments] = useState(false);
   
+  // Build display code map for drivers in current dataset
+  const driverCodeMap = useMemo(() => {
+    const ids = Array.from(new Set(drivers.map(d => d.id).filter(Boolean)));
+    ids.sort();
+    const map = {};
+    ids.forEach((id, idx) => {
+      map[id] = `DRIVER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [drivers]);
+  
   // Document viewer states - Updated for smaller modal
   const [showDocumentViewer, setShowDocumentViewer] = useState(false);
   const [currentDocument, setCurrentDocument] = useState(null);
@@ -66,6 +77,7 @@ export default function DriversAdminPage() {
   // Table filtering states
   const [tableFilters, setTableFilters] = useState({
     name: '',
+    code: '',
     vehicle: '',
     kycStatus: '',
     vehicleStatus: '',
@@ -157,6 +169,7 @@ export default function DriversAdminPage() {
   const clearAllFilters = () => {
     setTableFilters({
       name: '',
+      code: '',
       vehicle: '',
       kycStatus: '',
       vehicleStatus: '',
@@ -196,7 +209,8 @@ export default function DriversAdminPage() {
 
     if (tableFilters.vehicleStatus) {
       filtered = filtered.filter(driver => {
-        const isActive = driver.vehicleActive === true;
+        if (!driver.vehicle) return false; // Only count drivers with a vehicle
+        const isActive = driver.vehicleActive !== false;
         const status = isActive ? 'active' : 'inactive';
         return status === tableFilters.vehicleStatus;
       });
@@ -204,10 +218,18 @@ export default function DriversAdminPage() {
 
     if (tableFilters.status) {
       filtered = filtered.filter(driver => {
-        if (tableFilters.status === 'active') return driver.is_active;
-        if (tableFilters.status === 'inactive') return !driver.is_active;
+        if (tableFilters.status === 'active') return driver.is_active !== false;
+        if (tableFilters.status === 'inactive') return driver.is_active === false;
         return true;
       });
+    }
+
+    // Filter by Driver Code (mapped from driver.id)
+    if (tableFilters.code) {
+      const q = tableFilters.code.toLowerCase();
+      filtered = filtered.filter(driver =>
+        (driverCodeMap[driver.id] || '').toLowerCase().includes(q)
+      );
     }
 
     // Apply sorting
@@ -216,7 +238,10 @@ export default function DriversAdminPage() {
         let aValue = a[sortConfig.key];
         let bValue = b[sortConfig.key];
 
-        if (sortConfig.key === 'name') {
+        if (sortConfig.key === 'code') {
+          aValue = driverCodeMap[a.id] || '';
+          bValue = driverCodeMap[b.id] || '';
+        } else if (sortConfig.key === 'name') {
           aValue = a.username || a.name || '';
           bValue = b.username || b.name || '';
         }
@@ -249,11 +274,11 @@ export default function DriversAdminPage() {
       );
     }
 
-    // Status filter
+    // Status filter (treat undefined as active to match dashboard)
     if (filters.statusFilter !== 'all') {
       filtered = filtered.filter(driver => {
-        if (filters.statusFilter === 'active') return driver.is_active;
-        if (filters.statusFilter === 'inactive') return !driver.is_active;
+        if (filters.statusFilter === 'active') return driver.is_active !== false;
+        if (filters.statusFilter === 'inactive') return driver.is_active === false;
         return true;
       });
     }
@@ -266,10 +291,11 @@ export default function DriversAdminPage() {
       });
     }
 
-    // Vehicle filter - Updated for active/inactive
+    // Vehicle filter - Updated for active/inactive (treat undefined as active)
     if (filters.vehicleFilter !== 'all') {
       filtered = filtered.filter(driver => {
-    const isActive = driver.vehicleActive === true;
+        if (!driver.vehicle) return false; // Only include if a vehicle exists
+        const isActive = driver.vehicleActive !== false;
         const status = isActive ? 'active' : 'inactive';
         return status === filters.vehicleFilter;
       });
@@ -326,8 +352,8 @@ export default function DriversAdminPage() {
   const fetchDriversWithKycAndVehicles = async () => {
     setLoading(true);
     try {
-      const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
-      const usersSnapshot = await getDocs(usersQuery);
+      // Fetch all users, then filter and sort client-side to avoid dropping docs
+      const usersSnapshot = await getDocs(collection(db, 'users'));
 
       const driversData = await Promise.all(
         usersSnapshot.docs.map(async (userDoc) => {
@@ -371,8 +397,19 @@ export default function DriversAdminPage() {
         })
       );
 
-      const filteredDriversData = driversData.filter(driver => driver !== null);
-      
+      // Filter only drivers and sort by createdAt desc client-side
+      const filteredDriversData = driversData
+        .filter(driver => driver !== null)
+        .sort((a, b) => {
+          const toDate = (v) => {
+            const d = v?.toDate ? v.toDate() : new Date(v);
+            return isNaN(d) ? new Date(0) : d;
+          };
+          const aDate = toDate(a.createdAt);
+          const bDate = toDate(b.createdAt);
+          return bDate - aDate; // desc
+        });
+
       setDrivers(filteredDriversData);
       setFilteredDrivers(filteredDriversData);
     } catch (error) {
@@ -955,14 +992,14 @@ export default function DriversAdminPage() {
                           : 'text-green-700 hover:bg-green-50'
                       }`}
                     >
-      {driver.vehicleActive === true ? (
-                        <>
-                          <XCircle className="w-4 h-4 mr-3" />
-                          Deactivate Vehicle
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4 mr-3" />
+      {driver.vehicleActive !== false ? (
+        <>
+          <XCircle className="w-4 h-4 mr-3" />
+          Deactivate Vehicle
+        </>
+      ) : (
+        <>
+          <CheckCircle className="w-4 h-4 mr-3" />
                           Activate Vehicle
                         </>
                       )}
@@ -1072,6 +1109,45 @@ export default function DriversAdminPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Added: KYC Rejected */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">KYC Rejected</CardTitle>
+            <XCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {drivers.filter(d => getKYCDisplayStatus(d.kyc_approved, d.kycStatus, Object.keys(d.kycDocuments || {}).length) === 'rejected').length}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Added: Active Vehicles */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Vehicles</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {drivers.filter(d => d.vehicle && d.vehicleActive !== false).length}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Added: Inactive Vehicles */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Inactive Vehicles</CardTitle>
+            <XCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-600">
+              {drivers.filter(d => d.vehicle && d.vehicleActive === false).length}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Enhanced Table with In-Table Filters and Clear All Button */}
@@ -1119,6 +1195,30 @@ export default function DriversAdminPage() {
                           placeholder="Search drivers..."
                           value={tableFilters.name}
                           onChange={(e) => handleTableFilterChange('name', e.target.value)}
+                          className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </TableHead>
+
+                  <TableHead className="w-[160px]">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleSort('code')}
+                        className="flex items-center space-x-1 text-left hover:text-blue-600"
+                      >
+                        <span>Driver Code</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search code..."
+                          value={tableFilters.code}
+                          onChange={(e) => handleTableFilterChange('code', e.target.value)}
                           className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                       </div>
@@ -1206,7 +1306,7 @@ export default function DriversAdminPage() {
                 {/* UPDATED: Show empty state when no data matches filters */}
                 {pagination.paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       <div className="text-gray-500">
                         <p className="text-sm font-medium">No Drivers found matching your filters</p>
                       </div>
@@ -1243,6 +1343,10 @@ export default function DriversAdminPage() {
                           </div>
                         </div>
                       </TableCell>
+
+                      <TableCell className="font-mono text-xs">
+                        {driverCodeMap[driver.id] || 'N/A'}
+                      </TableCell>
                       
                       <TableCell>
                         <div className="space-y-2">
@@ -1259,7 +1363,7 @@ export default function DriversAdminPage() {
                                   {driver.vehicle.number}
                                 </p>
                               </div>
-      {getVehicleStatusBadge(driver.vehicleActive === true)}
+      {getVehicleStatusBadge(driver.vehicleActive !== false)}
                             </>
                           ) : (
                             <div className="flex items-center gap-2 text-muted-foreground">
@@ -1283,7 +1387,7 @@ export default function DriversAdminPage() {
                       <TableCell>
                         <div className="space-y-2">
                           {driver.vehicle ? (
-      getVehicleStatusBadge(driver.vehicleActive === true)
+      getVehicleStatusBadge(driver.vehicleActive !== false)
                           ) : (
                             <span className="text-xs text-gray-500">No vehicle</span>
                           )}
@@ -1429,7 +1533,7 @@ export default function DriversAdminPage() {
                       <div>
                         <strong>Vehicle Status:</strong>
                         <span className="ml-2">
-      {getVehicleStatusBadge(selectedDriver.vehicleActive === true)}
+      {getVehicleStatusBadge(selectedDriver.vehicleActive !== false)}
                         </span>
                       </div>
 
@@ -1602,14 +1706,14 @@ export default function DriversAdminPage() {
                         : 'bg-green-500 text-white hover:bg-green-600'
                     }`}
                   >
-      {selectedDriver.vehicleActive === true ? (
-                      <>
-                        <XCircle className="w-4 h-4" />
-                        Deactivate Vehicle
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4" />
+      {selectedDriver.vehicleActive !== false ? (
+        <>
+          <XCircle className="w-4 h-4" />
+          Deactivate Vehicle
+        </>
+      ) : (
+        <>
+          <CheckCircle className="w-4 h-4" />
                         Activate Vehicle
                       </>
                     )}

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
 import {
@@ -56,21 +56,50 @@ export default function BookingsPage() {
     applyTableFilters();
   }, [bookings, tableFilters, sortConfig]);
 
+  // Build display code maps for drivers and riders within current bookings dataset
+  const driverCodeMap = useMemo(() => {
+    const ids = Array.from(new Set(bookings.map(b => b.driverId).filter(Boolean)));
+    ids.sort();
+    const map = {};
+    ids.forEach((id, idx) => {
+      map[id] = `DRIVER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [bookings]);
+
+  const riderCodeMap = useMemo(() => {
+    const ids = Array.from(new Set(bookings.map(b => b.riderId).filter(Boolean)));
+    ids.sort();
+    const map = {};
+    ids.forEach((id, idx) => {
+      map[id] = `RIDER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [bookings]);
+
   // Apply table-specific filters
   const applyTableFilters = () => {
     let filtered = [...bookings];
 
     // Apply filters
     if (tableFilters.driverId) {
-      filtered = filtered.filter(booking =>
-        booking.driverId?.toLowerCase().includes(tableFilters.driverId.toLowerCase())
-      );
+      filtered = filtered.filter(booking => {
+        const code = driverCodeMap[booking.driverId] || '';
+        return (
+          booking.driverId?.toLowerCase().includes(tableFilters.driverId.toLowerCase()) ||
+          code.toLowerCase().includes(tableFilters.driverId.toLowerCase())
+        );
+      });
     }
 
     if (tableFilters.riderId) {
-      filtered = filtered.filter(booking =>
-        booking.riderId?.toLowerCase().includes(tableFilters.riderId.toLowerCase())
-      );
+      filtered = filtered.filter(booking => {
+        const code = riderCodeMap[booking.riderId] || '';
+        return (
+          booking.riderId?.toLowerCase().includes(tableFilters.riderId.toLowerCase()) ||
+          code.toLowerCase().includes(tableFilters.riderId.toLowerCase())
+        );
+      });
     }
 
     if (tableFilters.status) {
@@ -353,12 +382,12 @@ export default function BookingsPage() {
                   
                   <TableHead className="min-w-[120px]">
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs sm:text-sm">Driver ID</span>
+                      <span className="text-xs sm:text-sm">Driver Code</span>
                     </div>
                     <div className="mt-2 hidden sm:block">
                       <input
                         type="text"
-                        placeholder="Search driver..."
+                        placeholder="Search driver code or ID..."
                         value={tableFilters.driverId}
                         onChange={(e) => handleTableFilterChange('driverId', e.target.value)}
                         className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -368,12 +397,12 @@ export default function BookingsPage() {
                   
                   <TableHead className="min-w-[120px]">
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs sm:text-sm">Rider ID</span>
+                      <span className="text-xs sm:text-sm">Rider Code</span>
                     </div>
                     <div className="mt-2 hidden sm:block">
                       <input
                         type="text"
-                        placeholder="Search rider..."
+                        placeholder="Search rider code or ID..."
                         value={tableFilters.riderId}
                         onChange={(e) => handleTableFilterChange('riderId', e.target.value)}
                         className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -462,7 +491,7 @@ export default function BookingsPage() {
                       <div className="flex items-center gap-1 sm:gap-2">
                         <User className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                         <span className="text-xs sm:text-sm font-mono">
-                          {booking.driverId ? booking.driverId.substring(0, 6) + '...' : 'N/A'}
+                          {booking.driverId ? (driverCodeMap[booking.driverId] || booking.driverId.substring(0, 6) + '...') : 'N/A'}
                         </span>
                       </div>
                     </TableCell>
@@ -471,7 +500,7 @@ export default function BookingsPage() {
                       <div className="flex items-center gap-1 sm:gap-2">
                         <User className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
                         <span className="text-xs sm:text-sm font-mono">
-                          {booking.riderId ? booking.riderId.substring(0, 6) + '...' : 'N/A'}
+                          {booking.riderId ? (riderCodeMap[booking.riderId] || booking.riderId.substring(0, 6) + '...') : 'N/A'}
                         </span>
                       </div>
                     </TableCell>
@@ -551,14 +580,14 @@ export default function BookingsPage() {
         <CardContent className="space-y-3">
           <input
             type="text"
-            placeholder="Search driver..."
+            placeholder="Search driver code or ID..."
             value={tableFilters.driverId}
             onChange={(e) => handleTableFilterChange('driverId', e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <input
             type="text"
-            placeholder="Search rider..."
+            placeholder="Search rider code or ID..."
             value={tableFilters.riderId}
             onChange={(e) => handleTableFilterChange('riderId', e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -684,7 +713,7 @@ export default function BookingsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <div><strong>Driver ID:</strong> <span className="break-all">{selectedBooking.driverId || 'N/A'}</span></div>
+                    <div><strong>Driver Code:</strong> <span className="break-all">{selectedBooking.driverId ? (driverCodeMap[selectedBooking.driverId] || selectedBooking.driverId) : 'N/A'}</span></div>
                   </CardContent>
                 </Card>
 
@@ -697,7 +726,7 @@ export default function BookingsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <div><strong>Rider ID:</strong> <span className="break-all">{selectedBooking.riderId || 'N/A'}</span></div>
+                    <div><strong>Rider Code:</strong> <span className="break-all">{selectedBooking.riderId ? (riderCodeMap[selectedBooking.riderId] || selectedBooking.riderId) : 'N/A'}</span></div>
                   </CardContent>
                 </Card>
               </div>

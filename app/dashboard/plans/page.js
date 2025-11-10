@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, query, orderBy, where, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase/config';
 import {
@@ -305,6 +305,7 @@ const SubscriptionPage = () => {
   const [planFilter, setPlanFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [users, setUsers] = useState([]);
   
   // Modal states
   const [confirmModal, setConfirmModal] = useState({
@@ -341,12 +342,42 @@ const SubscriptionPage = () => {
     filterAndSortSubscriptions();
   }, [subscriptions, searchTerm, planFilter, statusFilter, sortBy]);
 
+  // Build role-based code maps for users to display Code ID in table
+  const riderCodeMap = useMemo(() => {
+    const riderIds = users.filter((u) => (u.role || '').toLowerCase() === 'rider')
+      .map((u) => u.id)
+      .sort();
+    const map = {};
+    riderIds.forEach((id, idx) => {
+      map[id] = `RIDER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [users]);
+
+  const driverCodeMap = useMemo(() => {
+    const driverIds = users.filter((u) => (u.role || '').toLowerCase() === 'driver')
+      .map((u) => u.id)
+      .sort();
+    const map = {};
+    driverIds.forEach((id, idx) => {
+      map[id] = `DRIVER${String(idx + 1).padStart(3, '0')}`;
+    });
+    return map;
+  }, [users]);
+
   const fetchSubscriptions = async () => {
     try {
       setLoading(true);
       // Fetch from both users collection and subscription subcollection
       const usersQuery = query(collection(db, 'users'));
       const usersSnapshot = await getDocs(usersQuery);
+      // Cache basic user info for role-based code mapping
+      const usersList = usersSnapshot.docs.map((userDoc) => ({
+        id: userDoc.id,
+        role: userDoc.data().role || 'user',
+        email: userDoc.data().email || 'N/A',
+      }));
+      setUsers(usersList);
       
       const allSubscriptions = [];
       
@@ -363,6 +394,7 @@ const SubscriptionPage = () => {
             id: subDoc.id,
             userId: userDoc.id,
             userEmail: userDoc.data().email || 'N/A',
+            userRole: (userDoc.data().role || 'user'),
             ...subDoc.data()
           });
         });
@@ -403,12 +435,21 @@ const SubscriptionPage = () => {
 
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(subscription =>
-        subscription.userEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        subscription.plan?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        subscription.payment_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        subscription.method?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((subscription) => {
+        const codeId = (subscription.userRole || '').toLowerCase() === 'driver'
+          ? driverCodeMap[subscription.userId]
+          : (subscription.userRole || '').toLowerCase() === 'rider'
+            ? riderCodeMap[subscription.userId]
+            : undefined;
+        return (
+          subscription.userEmail?.toLowerCase().includes(term) ||
+          subscription.plan?.toLowerCase().includes(term) ||
+          subscription.payment_id?.toLowerCase().includes(term) ||
+          subscription.method?.toLowerCase().includes(term) ||
+          (codeId && codeId.toLowerCase().includes(term))
+        );
+      });
     }
 
     // Apply plan filter
@@ -676,6 +717,7 @@ const SubscriptionPage = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>User</TableHead>
+                      <TableHead>Code ID</TableHead>
                       <TableHead>Plan</TableHead>
                       <TableHead>Price</TableHead>
                       <TableHead>Payment Method</TableHead>
@@ -697,6 +739,13 @@ const SubscriptionPage = () => {
                               {subscription.userId?.substring(0, 8)}...
                             </code>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
+                            {((subscription.userRole || '').toLowerCase() === 'driver' && driverCodeMap[subscription.userId]) ||
+                             ((subscription.userRole || '').toLowerCase() === 'rider' && riderCodeMap[subscription.userId]) ||
+                             'N/A'}
+                          </span>
                         </TableCell>
                         
                         <TableCell>
