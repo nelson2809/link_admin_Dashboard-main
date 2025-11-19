@@ -43,6 +43,8 @@ import {
   Line,
   Area,
   AreaChart,
+  CartesianGrid,
+  LabelList,
 } from "recharts";
 import {
   Users,
@@ -61,6 +63,7 @@ import {
   Filter,
   User,
   CalendarDays,
+  CreditCard,
 } from "lucide-react";
 
 
@@ -82,10 +85,16 @@ function DashboardContent() {
     vehicleActive: 0,
     vehicleInactive: 0,
     vehiclesWithoutInfo: 0,
+    planOneRide: 0,
+    planSixRide: 0,
+    planYearly: 0,
   });
   const [chartData, setChartData] = useState([]);
   const [pieData, setPieData] = useState([]);
+  const [ratingPieData, setRatingPieData] = useState([]);
+  const [ratingsActiveIndex, setRatingsActiveIndex] = useState(null);
   const [revenueData, setRevenueData] = useState([]);
+  const [planPieData, setPlanPieData] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bookingDetailsOpen, setBookingDetailsOpen] = useState(false);
@@ -523,6 +532,35 @@ function DashboardContent() {
       // Riders dataset for dedicated riders count
       const ridersData = usersData.filter((user) => user.role === "rider");
 
+      // Fetch subscriptions from each user's subcollection to build plan analytics
+      const allSubscriptions = [];
+      for (const userDoc of usersSnapshot.docs) {
+        const subscriptionQuery = query(
+          collection(db, 'users', userDoc.id, 'subscription'),
+          orderBy('startDate', 'desc')
+        );
+        const subscriptionSnapshot = await getDocs(subscriptionQuery);
+        subscriptionSnapshot.forEach(subDoc => {
+          allSubscriptions.push({ id: subDoc.id, userId: userDoc.id, ...subDoc.data() });
+        });
+      }
+
+      // Compute plan distribution counts (robust name matching)
+      const normalize = (v) => (v || '').toLowerCase();
+      const oneRideCount = allSubscriptions.filter((s) => {
+        const p = normalize(s.plan);
+        return p.includes('1 ride') || p.includes('1 rider');
+      }).length;
+      const sixRideCount = allSubscriptions.filter((s) => {
+        const p = normalize(s.plan);
+        return p.includes('6 ride') || p.includes('6 rides') || p.includes('6ride');
+      }).length;
+      const yearlyCount = allSubscriptions.filter((s) => {
+        const p = normalize(s.plan);
+        return p.includes('yearly') || p.includes('annual');
+      }).length;
+      const otherCount = Math.max(0, allSubscriptions.length - (oneRideCount + sixRideCount + yearlyCount));
+
 
       // Fetch bookings data
       const bookingsStats = await fetchBookingsData();
@@ -659,6 +697,9 @@ function DashboardContent() {
         vehicleActive,
         vehicleInactive,
         vehiclesWithoutInfo,
+        planOneRide: oneRideCount,
+        planSixRide: sixRideCount,
+        planYearly: yearlyCount,
       });
 
 
@@ -684,6 +725,33 @@ function DashboardContent() {
         { name: "Not Submitted", value: kycNotSubmitted, color: "#6b7280" },
       ]);
 
+      // Plan subscription distribution for charting
+      setPlanPieData([
+        { name: '1 Ride', value: oneRideCount, color: '#3b82f6' },
+        { name: '6 Rides', value: sixRideCount, color: '#6366f1' },
+        { name: 'Yearly', value: yearlyCount, color: '#8b5cf6' },
+        { name: 'Other', value: otherCount, color: '#6b7280' },
+      ]);
+
+
+      // Ratings distribution from feedback
+      const feedbackSnapshot = await getDocs(query(
+        collection(db, 'feedback'),
+        orderBy('createdAt', 'desc')
+      ));
+      const feedbackData = feedbackSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const ratingDist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      feedbackData.forEach((f) => {
+        const r = parseInt(f.rating || 0, 10);
+        if (ratingDist[r] !== undefined) ratingDist[r] += 1;
+      });
+      setRatingPieData([
+        { name: '1 Star', value: ratingDist[1], color: '#ef4444' },
+        { name: '2 Stars', value: ratingDist[2], color: '#fb923c' },
+        { name: '3 Stars', value: ratingDist[3], color: '#f59e0b' },
+        { name: '4 Stars', value: ratingDist[4], color: '#84cc16' },
+        { name: '5 Stars', value: ratingDist[5], color: '#16a34a' },
+      ]);
 
       // Generate dynamic revenue data based on actual bookings
       const dynamicRevenueData = generateDynamicRevenueData(
@@ -1218,6 +1286,125 @@ function DashboardContent() {
             </ChartContainer>
           </CardContent>
         </Card>
+        {/* Ratings Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Ratings Distribution</CardTitle>
+            <CardDescription>
+              User feedback ratings breakdown
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                oneStar: { label: '1 Star', color: '#ef4444' },
+                twoStars: { label: '2 Stars', color: '#fb923c' },
+                threeStars: { label: '3 Stars', color: '#f59e0b' },
+                fourStars: { label: '4 Stars', color: '#84cc16' },
+                fiveStars: { label: '5 Stars', color: '#16a34a' },
+              }}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={ratingPieData}
+                  layout="vertical"
+                  margin={{ top: 10, right: 30, left: 40, bottom: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis type="number" tick={{ fontSize: 12 }} domain={[0, 'dataMax + 1']} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={90} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="value" barSize={22} radius={[6, 6, 6, 6]}>
+                    {ratingPieData.map((entry, index) => (
+                      <Cell key={`rating-bar-${index}`} fill={entry.color} />
+                    ))}
+                    <LabelList dataKey="value" position="right" fill="#374151" fontSize={12} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+        {/* Subscription Plan Analytics */}
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start justify-start">
+          {/* Diagram on the left at ~90% width on large screens */}
+          <div className="lg:w-[90%] w-full">
+            <Card className="h-full">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium">Subscription Plan Analytics</CardTitle>
+              </CardHeader>
+              <CardContent className="w-full max-w-[240px] mx-0">
+                <ChartContainer
+                  config={{
+                    oneRide: { label: '1 Ride', color: '#3b82f6' },
+                    sixRides: { label: '6 Rides', color: '#6366f1' },
+                    yearly: { label: 'Yearly', color: '#8b5cf6' },
+                    other: { label: 'Other', color: '#6b7280' },
+                  }}
+                  className="h-[300px]"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={planPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={120}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {planPieData.map((entry, index) => (
+                          <Cell key={`plan-cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Three compact cards in a single vertical column on the right */}
+          <div className="w-full lg:w-[60%]">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:max-w-[360px]">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                  <CardTitle className="text-xs font-medium">1 Ride Plan</CardTitle>
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="text-xl font-bold text-blue-600">{stats.planOneRide}</div>
+                  <p className="text-xs text-muted-foreground">Total subscriptions</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                  <CardTitle className="text-xs font-medium">6 Rides Plan</CardTitle>
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="text-xl font-bold text-indigo-600">{stats.planSixRide}</div>
+                  <p className="text-xs text-muted-foreground">Total subscriptions</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+                  <CardTitle className="text-xs font-medium">Yearly Plan</CardTitle>
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="text-xl font-bold text-purple-600">{stats.planYearly}</div>
+                  <p className="text-xs text-muted-foreground">Total subscriptions</p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Users Table */}

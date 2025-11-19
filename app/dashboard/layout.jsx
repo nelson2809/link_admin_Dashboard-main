@@ -26,9 +26,9 @@ export default function DashboardLayout({ children }) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="overflow-y-auto">
         {/* Header with sidebar trigger */}
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+        <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-white shadow-sm">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold">Link Admin</h1>
@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }) {
         </header>
         
         {/* Main content */}
-        <main className="flex-1 overflow-auto p-4">
+        <main className="flex-1 p-4">
           {children}
         </main>
       </SidebarInset>
